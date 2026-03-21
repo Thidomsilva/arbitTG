@@ -4,6 +4,17 @@ Seu bot Telegram agora tem comandos para você controlar o monitor **diretamente
 
 ## Primeiros Passos
 
+### 0. Fixar Token e Chat ID (opcional, recomendado)
+
+No Vercel, em **Settings > Environment Variables**, adicione:
+
+```bash
+TELEGRAM_BOT_TOKEN=seu_token
+TELEGRAM_CHAT_ID=seu_chat_id
+```
+
+Com isso, a ferramenta envia alertas mesmo com os campos de Token/Chat ID vazios na interface.
+
 ### 1. Configure o Webhook (uma única vez)
 
 Substitua `SEU_TOKEN` e `SUA_URL`:

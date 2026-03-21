@@ -19,18 +19,20 @@ module.exports = async (req, res) => {
 
   try {
     const { token, chat_id, message } = req.body;
+    const effectiveToken = (token || '').trim() || process.env.TELEGRAM_BOT_TOKEN;
+    const effectiveChatId = String(chat_id || '').trim() || process.env.TELEGRAM_CHAT_ID;
 
-    if (!token || !chat_id || !message) {
+    if (!effectiveToken || !effectiveChatId || !message) {
       return res.status(400).json({ ok: false, error: 'Missing required fields' });
     }
 
-    const url = `https://api.telegram.org/bot${token}/sendMessage`;
+    const url = `https://api.telegram.org/bot${effectiveToken}/sendMessage`;
     
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        chat_id: chat_id,
+        chat_id: effectiveChatId,
         text: message,
         parse_mode: 'HTML'
       })

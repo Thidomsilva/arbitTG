@@ -583,6 +583,9 @@
       </div>
       <button class="btn btn-outline" onclick="testTelegram()">Testar Bot</button>
     </div>
+    <div style="margin-top:10px;font-size:11px;color:var(--muted)">
+      Dica: Token e Chat ID ficam salvos no navegador automaticamente. Se configurar no backend, os campos podem ficar em branco.
+    </div>
     <div class="tg-status" id="tgStatus" style="display:none">
       <div class="dot" id="tgDot"></div>
       <span id="tgStatusText">—</span>
@@ -709,7 +712,7 @@
       <div style="font-size:11px;color:var(--muted)">A→B→C→A • lucro líquido após fees</div>
     </div>
     <div style="padding:12px 20px; background:rgba(124,106,247,0.06); border-bottom:1px solid var(--border); font-size:11px; color:var(--muted); line-height:1.8">
-      🔺 <strong style="color:var(--accent3)">Como funciona:</strong> começa com USDT → compra moeda A → converte para moeda B → volta pra USDT. Se o produto dos 3 preços &gt; 1 após fees, é lucro!
+      🔺 <strong style="color:var(--accent3)">Como funciona:</strong> começa em BRL → compra USDT → compra moeda A → vende de volta para BRL. Se o produto das 3 pernas &gt; 1 após fees, é lucro!
       &nbsp;|&nbsp; Ex: <span style="color:var(--accent)">USDT → XRP → BRZ → USDT</span>
     </div>
     <div id="triangularContainer">
@@ -1096,118 +1099,75 @@ const EXCHANGE_FEES = {
   llamaswap: 0.002, picnic: 0.002,
 };
 
-// Rotas triangulares focadas no seu perfil
-const TRIANGULAR_ROUTES = [
-  // USDT como base — rotas clássicas
-  { a: 'USDT', b: 'XRP',  c: 'BRZ',  label: 'USDT→XRP→BRZ→USDT'  },
-  { a: 'USDT', b: 'XRP',  c: 'SOL',  label: 'USDT→XRP→SOL→USDT'  },
-  { a: 'USDT', b: 'SOL',  c: 'XRP',  label: 'USDT→SOL→XRP→USDT'  },
-  { a: 'USDT', b: 'XRP',  c: 'ETH',  label: 'USDT→XRP→ETH→USDT'  },
-  { a: 'USDT', b: 'SOL',  c: 'ETH',  label: 'USDT→SOL→ETH→USDT'  },
-  { a: 'USDT', b: 'XRP',  c: 'DOGE', label: 'USDT→XRP→DOGE→USDT' },
-  { a: 'USDT', b: 'XRP',  c: 'LTC',  label: 'USDT→XRP→LTC→USDT'  },
-  { a: 'USDT', b: 'XRP',  c: 'LINK', label: 'USDT→XRP→LINK→USDT' },
-  { a: 'USDT', b: 'BRZ',  c: 'XRP',  label: 'USDT→BRZ→XRP→USDT'  },
-  { a: 'USDT', b: 'SOL',  c: 'DOGE', label: 'USDT→SOL→DOGE→USDT' },
-  { a: 'USDT', b: 'SOL',  c: 'ADA',  label: 'USDT→SOL→ADA→USDT'  },
-  { a: 'USDT', b: 'XRP',  c: 'ADA',  label: 'USDT→XRP→ADA→USDT'  },
-  { a: 'USDT', b: 'XRP',  c: 'AVAX', label: 'USDT→XRP→AVAX→USDT' },
-  { a: 'USDT', b: 'DOGE', c: 'XRP',  label: 'USDT→DOGE→XRP→USDT' },
-  { a: 'USDT', b: 'LTC',  c: 'XRP',  label: 'USDT→LTC→XRP→USDT'  },
-  // BRZ como pivot — oportunidade Brasil
-  { a: 'BRZ',  b: 'XRP',  c: 'USDT', label: 'BRZ→XRP→USDT→BRZ'  },
-  { a: 'BRZ',  b: 'SOL',  c: 'USDT', label: 'BRZ→SOL→USDT→BRZ'  },
-  { a: 'BRZ',  b: 'DOGE', c: 'USDT', label: 'BRZ→DOGE→USDT→BRZ' },
-];
-
 function calcTriangular(priceData) {
   const capital = parseFloat(document.getElementById('capital').value) || 1000;
   const results = [];
 
-  // Montar tabela de preços: token → preço em USDT (média entre exchanges disponíveis)
-  const avgPrices = {};
-  const allPricesFlat = {};
+  function bestLeg(fromAsset, toAsset) {
+    let best = null;
 
-  for (const [pair, prices] of Object.entries(priceData)) {
-    const [base, quote] = pair.split('/');
-    const vals = Object.entries(prices).filter(([,p]) => p && p > 0);
-    if (!vals.length) continue;
+    for (const [pair, prices] of Object.entries(priceData)) {
+      const [base, quote] = pair.split('/');
 
-    // Para pares em USDT: preço direto
-    if (quote === 'USDT') {
-      // Guardar por exchange também
-      for (const [ex, p] of vals) {
-        if (!allPricesFlat[base]) allPricesFlat[base] = {};
-        allPricesFlat[base][ex] = p;
+      for (const [ex, p] of Object.entries(prices || {})) {
+        const price = parseFloat(p);
+        if (!price || price <= 0) continue;
+
+        let rate = null;
+        let refPrice = price;
+
+        // base/quote = price => 1 base custa "price" quote
+        if (fromAsset === quote && toAsset === base) {
+          // comprar base com quote
+          rate = 1 / price;
+        } else if (fromAsset === base && toAsset === quote) {
+          // vender base por quote
+          rate = price;
+        }
+
+        if (!rate) continue;
+
+        const fee = EXCHANGE_FEES[ex] || 0.002;
+        const netRate = rate * (1 - fee);
+
+        if (!best || netRate > best.netRate) {
+          best = { ex, rate, netRate, fee, refPrice, pair };
+        }
       }
-      avgPrices[base] = vals.reduce((s,[,p]) => s+p, 0) / vals.length;
     }
-    // Para BRZ/USDT: preço do BRZ em USDT
-    if (base === 'BRZ' && quote === 'USDT') {
-      avgPrices['BRZ'] = vals.reduce((s,[,p]) => s+p, 0) / vals.length;
+
+    return best;
+  }
+
+  // Sempre começar em BRL e passar por USDT: BRL -> USDT -> TOKEN -> BRL
+  const candidates = new Set();
+  for (const pair of Object.keys(priceData)) {
+    const [base, quote] = pair.split('/');
+    if (quote === 'USDT' && base !== 'USDT' && base !== 'BRL') {
+      candidates.add(base);
     }
   }
 
-  for (const route of TRIANGULAR_ROUTES) {
-    const { a, b, c, label } = route;
+  const legBRLtoUSDT = bestLeg('BRL', 'USDT');
+  if (!legBRLtoUSDT) return results;
 
-    // Precisamos: preço de B em A, preço de C em B, preço de A em C
-    // Simplificado via USD como denominador comum
-    const priceA = a === 'USDT' ? 1 : avgPrices[a];
-    const priceB = b === 'USDT' ? 1 : avgPrices[b];
-    const priceC = c === 'USDT' ? 1 : avgPrices[c];
+  for (const token of candidates) {
+    const legUSDTtoToken = bestLeg('USDT', token);
+    const legTokentoBRL = bestLeg(token, 'BRL');
+    if (!legUSDTtoToken || !legTokentoBRL) continue;
 
-    if (!priceA || !priceB || !priceC) continue;
-
-    // Leg 1: A → B  (comprar B com A)
-    // Leg 2: B → C  (comprar C com B)
-    // Leg 3: C → A  (comprar A com C)
-    // Produto = (1/priceB_in_A) * (priceB_in_C_ratio) ...
-    // Cálculo direto: começamos com capital em A
-    // Convertemos para B: capital / (priceB/priceA) = capital * priceA / priceB
-    // Convertemos para C: * priceB / priceC
-    // Convertemos para A: * priceC / priceA
-    // Produto total = (priceA/priceB) * (priceB/priceC) * (priceC/priceA) = 1 (sem ineficiência)
-    // Com ineficiência: usamos preços de exchanges diferentes
-
-    // Estratégia: comprar B no mais barato, vender C no mais caro
-    const priceBmin = allPricesFlat[b] ? Math.min(...Object.values(allPricesFlat[b])) : priceB;
-    const priceCmax = allPricesFlat[c] ? Math.max(...Object.values(allPricesFlat[c])) : priceC;
-    const priceCmin = allPricesFlat[c] ? Math.min(...Object.values(allPricesFlat[c])) : priceC;
-
-    const buyBEx  = allPricesFlat[b] ? Object.entries(allPricesFlat[b]).find(([,p]) => p === priceBmin)?.[0] : '?';
-    const sellCEx = allPricesFlat[c] ? Object.entries(allPricesFlat[c]).find(([,p]) => p === priceCmax)?.[0] : '?';
-
-    // Fee total das 3 pernas (fee de cada exchange)
-    const fee1 = EXCHANGE_FEES[buyBEx]  || 0.002;
-    const fee2 = EXCHANGE_FEES[sellCEx] || 0.002;
-    const fee3 = 0.002; // 0,20% na 3a perna
-
-    // Calcular produto da rota com preços reais
-    let amount = capital; // começa em USDT (ou A)
-
-    // Leg1: comprar B
-    amount = amount / priceBmin;         // agora em B
-    amount = amount * (1 - fee1);
-
-    // Leg2: vender B por C (usando taxa cruzada)
-    // preço de C em termos de B = priceC / priceB
-    const ratioBC = priceCmin / priceBmin;
-    amount = amount / ratioBC;           // agora em C
-    amount = amount * (1 - fee2);
-
-    // Leg3: vender C por A (USDT)
-    amount = amount * priceCmax;         // volta pra USDT
-    amount = amount * (1 - fee3);
-
-    const profit = amount - capital;
+    const finalAmount = capital * legBRLtoUSDT.netRate * legUSDTtoToken.netRate * legTokentoBRL.netRate;
+    const profit = finalAmount - capital;
     const profitPct = (profit / capital) * 100;
 
     results.push({
-      label, a, b, c,
+      label: `BRL→USDT→${token}→BRL`,
+      a: 'BRL', b: 'USDT', c: token,
       profitPct, profit, capital,
-      buyBEx, sellCEx,
-      priceBmin, priceCmax,
+      buyBEx: legBRLtoUSDT.ex,
+      sellCEx: legTokentoBRL.ex,
+      priceBmin: legBRLtoUSDT.refPrice,
+      priceCmax: legTokentoBRL.refPrice,
       viable: profitPct > 0,
     });
   }
@@ -1388,10 +1348,35 @@ function updateTicker(priceData) {
 // ============================================
 // TELEGRAM
 // ============================================
+const TG_TOKEN_KEY = 'cryptoarb_bot_token';
+const TG_CHAT_KEY = 'cryptoarb_chat_id';
+
+function loadTelegramConfig() {
+  try {
+    const token = localStorage.getItem(TG_TOKEN_KEY) || '';
+    const chatId = localStorage.getItem(TG_CHAT_KEY) || '';
+    if (token) document.getElementById('botToken').value = token;
+    if (chatId) document.getElementById('chatId').value = chatId;
+  } catch (e) {
+    console.error('Erro ao carregar config Telegram:', e);
+  }
+}
+
+function persistTelegramConfig() {
+  try {
+    const token = document.getElementById('botToken').value.trim();
+    const chatId = document.getElementById('chatId').value.trim();
+    if (token) localStorage.setItem(TG_TOKEN_KEY, token);
+    if (chatId) localStorage.setItem(TG_CHAT_KEY, chatId);
+  } catch (e) {
+    console.error('Erro ao salvar config Telegram:', e);
+  }
+}
+
 async function sendTelegram(message) {
   const token = document.getElementById('botToken').value.trim();
   const chatId = document.getElementById('chatId').value.trim();
-  if (!token || !chatId) return false;
+  persistTelegramConfig();
 
   // Try direct first, fallback to CORS proxies
   const proxies = [
@@ -1432,7 +1417,7 @@ async function sendTelegram(message) {
 async function testTelegram() {
   const token = document.getElementById('botToken').value.trim();
   const chatId = document.getElementById('chatId').value.trim();
-  if (!token || !chatId) { toast('Preencha o Token e o Chat ID.', 'warn'); return; }
+  if (token || chatId) persistTelegramConfig();
 
   toast('Enviando mensagem de teste...', 'success');
   const ok = await sendTelegram(`🤖 <b>CryptoArb conectado!</b>\n\nSeu monitor de arbitragem está configurado e funcionando.\n\n📊 Exchanges: ${state.activeExchanges.map(e => exchangeInfo[e].name).join(', ')}\n💱 Pares: ${state.activePairs.join(', ')}`);
@@ -1610,6 +1595,9 @@ function toast(msg, type = 'success') {
 // INIT
 // ============================================
 initChips();
+loadTelegramConfig();
+document.getElementById('botToken').addEventListener('change', persistTelegramConfig);
+document.getElementById('chatId').addEventListener('change', persistTelegramConfig);
 </script>
 </body>
 </html>
