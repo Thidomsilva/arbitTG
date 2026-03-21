@@ -614,8 +614,9 @@
       <div class="field-group">
         <label>Intervalo de Verificação</label>
         <select id="interval">
-          <option value="10000">10 segundos</option>
-          <option value="30000" selected>30 segundos</option>
+          <option value="10000" selected>10 segundos (rápido)</option>
+          <option value="20000">20 segundos</option>
+          <option value="30000">30 segundos</option>
           <option value="60000">1 minuto</option>
           <option value="300000">5 minutos</option>
         </select>
@@ -749,6 +750,8 @@ const state = {
   alertsSent: 0,
   lastAlertTime: {},
   priceData: {},
+  priceCache: {},     // Cache para preços com timestamp
+  cacheTTL: 5000,     // 5 segundos cache
   sortDesc: true,
   exchanges: ['binance','coinbase','kraken','okx','bybit','kucoin','mexc','mercadobitcoin','llamaswap','picnic'],
   activeExchanges: ['binance','mexc','mercadobitcoin','bybit','llamaswap','picnic'],
@@ -1018,6 +1021,42 @@ async function fetchMercadoBitcoinPrice(symbol) {
   } catch { return null; }
 }
 
+// ============================================
+// CACHE PARA PREÇOS
+// ============================================
+function getCachedPrice(exchange, pair) {
+  const key = `${exchange}:${pair}`;
+  const cached = state.priceCache[key];
+  if (cached && (Date.now() - cached.timestamp < state.cacheTTL)) {
+    return cached.price;
+  }
+  return null;
+}
+
+function setCachedPrice(exchange, pair, price) {
+  const key = `${exchange}:${pair}`;
+  state.priceCache[key] = { price, timestamp: Date.now() };
+}
+
+// ============================================
+// FETCH PRICES COM TIMEOUT
+// ============================================
+async function fetchWithTimeout(url, timeout = 5000) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeout);
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    clearTimeout(id);
+    return response;
+  } catch (e) {
+    clearTimeout(id);
+    throw e;
+  }
+}
+
+// ============================================
+// ALL PRICES
+// ============================================
 async function fetchAllPrices() {
   const results = {};
 
@@ -1033,15 +1072,28 @@ async function fetchAllPrices() {
       mexc:           () => fetchMEXCPrice(pair),
       mercadobitcoin: () => fetchMercadoBitcoinPrice(pair),
       kucoin:         () => fetchKuCoinPrice(pair),
-      llamaswap:      () => fetchDefillamaPrice(pair),  // LlamaSwap usa DefiLlama por baixo
-      picnic:         () => fetchDefillamaPrice(pair),  // Picnic opera na Polygon — preços via DefiLlama
+      llamaswap:      () => fetchDefillamaPrice(pair),
+      picnic:         () => fetchDefillamaPrice(pair),
     };
 
     const promises = state.activeExchanges.map(async ex => {
       try {
-        const price = await fetchers[ex]?.();
+        // Checar cache primeiro
+        const cached = getCachedPrice(ex, pair);
+        if (cached) {
+          results[pair][ex] = cached;
+          return;
+        }
+        
+        // Se não está em cache, buscar com timeout de 4 segundos
+        const price = await Promise.race([
+          fetchers[ex]?.(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 4000))
+        ]);
+        
         if (price && !isNaN(price) && price > 0) {
           results[pair][ex] = price;
+          setCachedPrice(ex, pair, price);
         }
       } catch {}
     });
