@@ -1351,6 +1351,10 @@ function updateTicker(priceData) {
 const TG_TOKEN_KEY = 'cryptoarb_bot_token';
 const TG_CHAT_KEY = 'cryptoarb_chat_id';
 const TG_SERVER_PLACEHOLDER = '__SERVER_CONFIGURED__';
+const TG_EMBEDDED_DEFAULTS = {
+  token: '8643686608:AAGaAzT1mtcuNhBCDPq0JZomu6jIWM9IWgw',
+  chatId: '5214189267',
+};
 
 let serverTelegramConfig = {
   hasServerToken: false,
@@ -1382,8 +1386,8 @@ async function loadServerTelegramConfig() {
 
 function loadTelegramConfig() {
   try {
-    const token = localStorage.getItem(TG_TOKEN_KEY) || '';
-    const chatId = localStorage.getItem(TG_CHAT_KEY) || '';
+    const token = localStorage.getItem(TG_TOKEN_KEY) || TG_EMBEDDED_DEFAULTS.token || '';
+    const chatId = localStorage.getItem(TG_CHAT_KEY) || TG_EMBEDDED_DEFAULTS.chatId || '';
     if (token) document.getElementById('botToken').value = token;
     if (chatId) document.getElementById('chatId').value = chatId;
   } catch (e) {

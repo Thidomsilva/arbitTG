@@ -1,4 +1,7 @@
 module.exports = async (req, res) => {
+  const EMBEDDED_BOT_TOKEN = '8643686608:AAGaAzT1mtcuNhBCDPq0JZomu6jIWM9IWgw';
+  const EMBEDDED_CHAT_ID = '5214189267';
+
   // Habilitar CORS
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -19,8 +22,14 @@ module.exports = async (req, res) => {
 
   try {
     const { token, chat_id, message } = req.body;
-    const effectiveToken = (token || '').trim() || process.env.TELEGRAM_BOT_TOKEN;
-    const effectiveChatId = String(chat_id || '').trim() || process.env.TELEGRAM_CHAT_ID;
+    const effectiveToken =
+      (token || '').trim() ||
+      process.env.TELEGRAM_BOT_TOKEN ||
+      EMBEDDED_BOT_TOKEN;
+    const effectiveChatId =
+      String(chat_id || '').trim() ||
+      process.env.TELEGRAM_CHAT_ID ||
+      EMBEDDED_CHAT_ID;
 
     if (!effectiveToken || !effectiveChatId || !message) {
       return res.status(400).json({
