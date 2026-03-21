@@ -1,6 +1,4 @@
-import axios from 'axios';
-
-export default async function handler(req, res) {
+module.exports = async (req, res) => {
   // Habilitar CORS
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -23,20 +21,30 @@ export default async function handler(req, res) {
     const { token, chat_id, message } = req.body;
 
     if (!token || !chat_id || !message) {
-      return res.status(400).json({ error: 'Missing required fields: token, chat_id, message' });
+      return res.status(400).json({ ok: false, error: 'Missing required fields' });
     }
 
     const url = `https://api.telegram.org/bot${token}/sendMessage`;
     
-    const response = await axios.post(url, {
-      chat_id,
-      text: message,
-      parse_mode: 'HTML'
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chat_id,
+        text: message,
+        parse_mode: 'HTML'
+      })
     });
 
-    res.status(200).json({ ok: true, result: response.data });
+    const data = await response.json();
+
+    if (data.ok) {
+      res.status(200).json({ ok: true, result: data });
+    } else {
+      res.status(200).json({ ok: false, error: data.description || 'Telegram error' });
+    }
   } catch (error) {
-    console.error('Error sending telegram message:', error.message);
-    res.status(500).json({ ok: false, error: error.message });
+    console.error('Error:', error.message);
+    res.status(200).json({ ok: false, error: error.message });
   }
-}
+};
