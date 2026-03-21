@@ -8,7 +8,12 @@ const activeMonitors = {};
 
 module.exports = async (req, res) => {
   try {
-    const { message } = req.body;
+    if (req.method !== 'POST') {
+      return res.status(200).json({ ok: true, message: 'Webhook ativo. Use POST.' });
+    }
+
+    const body = req.body || {};
+    const { message } = body;
 
     // Comando via mensagem
     if (message) {
