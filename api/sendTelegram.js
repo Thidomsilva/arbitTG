@@ -23,7 +23,10 @@ module.exports = async (req, res) => {
     const effectiveChatId = String(chat_id || '').trim() || process.env.TELEGRAM_CHAT_ID;
 
     if (!effectiveToken || !effectiveChatId || !message) {
-      return res.status(400).json({ ok: false, error: 'Missing required fields' });
+      return res.status(400).json({
+        ok: false,
+        error: 'Missing required fields: informe token/chat_id no formulario ou configure TELEGRAM_BOT_TOKEN e TELEGRAM_CHAT_ID no Vercel',
+      });
     }
 
     const url = `https://api.telegram.org/bot${effectiveToken}/sendMessage`;

@@ -1350,6 +1350,35 @@ function updateTicker(priceData) {
 // ============================================
 const TG_TOKEN_KEY = 'cryptoarb_bot_token';
 const TG_CHAT_KEY = 'cryptoarb_chat_id';
+const TG_SERVER_PLACEHOLDER = '__SERVER_CONFIGURED__';
+
+let serverTelegramConfig = {
+  hasServerToken: false,
+  serverChatId: '',
+};
+
+async function loadServerTelegramConfig() {
+  try {
+    const r = await fetch('/api/telegram-config');
+    const d = await r.json();
+    if (!d?.ok) return;
+
+    serverTelegramConfig.hasServerToken = !!d.hasServerToken;
+    serverTelegramConfig.serverChatId = d.serverChatId || '';
+
+    if (serverTelegramConfig.hasServerToken) {
+      const tokenEl = document.getElementById('botToken');
+      if (!tokenEl.value) tokenEl.value = TG_SERVER_PLACEHOLDER;
+    }
+
+    if (serverTelegramConfig.serverChatId) {
+      const chatEl = document.getElementById('chatId');
+      if (!chatEl.value) chatEl.value = serverTelegramConfig.serverChatId;
+    }
+  } catch (e) {
+    console.error('Erro ao carregar config do servidor:', e);
+  }
+}
 
 function loadTelegramConfig() {
   try {
@@ -1366,7 +1395,7 @@ function persistTelegramConfig() {
   try {
     const token = document.getElementById('botToken').value.trim();
     const chatId = document.getElementById('chatId').value.trim();
-    if (token) localStorage.setItem(TG_TOKEN_KEY, token);
+    if (token && token !== TG_SERVER_PLACEHOLDER) localStorage.setItem(TG_TOKEN_KEY, token);
     if (chatId) localStorage.setItem(TG_CHAT_KEY, chatId);
   } catch (e) {
     console.error('Erro ao salvar config Telegram:', e);
@@ -1374,7 +1403,8 @@ function persistTelegramConfig() {
 }
 
 async function sendTelegram(message) {
-  const token = document.getElementById('botToken').value.trim();
+  const rawToken = document.getElementById('botToken').value.trim();
+  const token = rawToken === TG_SERVER_PLACEHOLDER ? '' : rawToken;
   const chatId = document.getElementById('chatId').value.trim();
   persistTelegramConfig();
 
@@ -1596,6 +1626,7 @@ function toast(msg, type = 'success') {
 // ============================================
 initChips();
 loadTelegramConfig();
+loadServerTelegramConfig();
 document.getElementById('botToken').addEventListener('change', persistTelegramConfig);
 document.getElementById('chatId').addEventListener('change', persistTelegramConfig);
 </script>
