@@ -12,17 +12,40 @@ module.exports = async (req, res) => {
       return res.status(200).json({ ok: true, message: 'Webhook ativo. Use POST.' });
     }
 
-    const body = req.body || {};
+    const body = normalizeBody(req.body);
+
+    // Responde imediatamente para o Telegram não reentregar update por timeout.
+    res.status(200).json({ ok: true });
+
+    void processUpdate(body);
+  } catch (error) {
+    console.error('Webhook error:', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+};
+
+function normalizeBody(body) {
+  if (!body) return {};
+  if (typeof body === 'string') {
+    try {
+      return JSON.parse(body);
+    } catch {
+      return {};
+    }
+  }
+  return body;
+}
+
+async function processUpdate(body) {
+  try {
     const { message } = body;
+    if (!message) return;
 
-    // Comando via mensagem
-    if (message) {
-      const chatId = message.chat.id;
-      const text = message.text?.trim();
+    const chatId = message.chat.id;
+    const text = (message.text || '').trim();
 
-      if (text === '/start' || text === '/help') {
-        await ensureBotCommands();
-        return sendMessage(chatId, `
+    if (text === '/start' || text === '/help') {
+      await sendMessage(chatId, `
 🤖 <b>CryptoArb Monitor</b>
 
 <b>Comandos Disponíveis:</b>
@@ -37,26 +60,27 @@ module.exports = async (req, res) => {
 <b>Exchanges Suportados:</b>
 binance, mexc, mercadobitcoin, kraken, coinbase, okx, kucoin, bybit
 `, {
-          keyboard: [
-            [{ text: '/monitor' }, { text: '/status' }],
-            [{ text: '/config' }, { text: '/stop' }],
-          ],
-          resize_keyboard: true,
-          is_persistent: true,
-        });
-      }
+        keyboard: [
+          [{ text: '/monitor' }, { text: '/status' }],
+          [{ text: '/config' }, { text: '/stop' }],
+        ],
+        resize_keyboard: true,
+        is_persistent: true,
+      });
+      return;
+    }
 
-      if (text === '/monitor') {
-        activeMonitors[chatId] = {
-          running: true,
-          startTime: new Date().toISOString(),
-          pairs: ['BTC/USDT', 'ETH/USDT', 'SOL/USDT'],
-          exchanges: ['binance', 'mexc', 'mercadobitcoin'],
-          minSpread: 1.5,
-          capital: 1000
-        };
+    if (text === '/monitor') {
+      activeMonitors[chatId] = {
+        running: true,
+        startTime: new Date().toISOString(),
+        pairs: ['BTC/USDT', 'ETH/USDT', 'SOL/USDT'],
+        exchanges: ['binance', 'mexc', 'mercadobitcoin'],
+        minSpread: 1.5,
+        capital: 1000,
+      };
 
-        return sendMessage(chatId, `
+      await sendMessage(chatId, `
 🚀 <b>Monitor Iniciado!</b>
 
 Monitorando:
@@ -67,25 +91,29 @@ Monitorando:
 
 Use /stop para parar ou /config para alterar.
 `);
+      return;
+    }
+
+    if (text === '/stop') {
+      if (!activeMonitors[chatId]) {
+        await sendMessage(chatId, '⏹️ Nenhum monitor ativo.');
+        return;
       }
 
-      if (text === '/stop') {
-        if (!activeMonitors[chatId]) {
-          return sendMessage(chatId, '⏹️ Nenhum monitor ativo.');
-        }
+      activeMonitors[chatId].running = false;
+      await sendMessage(chatId, '⏹️ Monitor parado!');
+      return;
+    }
 
-        activeMonitors[chatId].running = false;
-        return sendMessage(chatId, '⏹️ Monitor parado!');
+    if (text === '/status') {
+      const monitor = activeMonitors[chatId];
+
+      if (!monitor) {
+        await sendMessage(chatId, '📊 Sem monitor ativo. Use /monitor para iniciar.');
+        return;
       }
 
-      if (text === '/status') {
-        const monitor = activeMonitors[chatId];
-        
-        if (!monitor) {
-          return sendMessage(chatId, '📊 Sem monitor ativo. Use /monitor para iniciar.');
-        }
-
-        return sendMessage(chatId, `
+      await sendMessage(chatId, `
 📊 <b>Status do Monitor</b>
 
 Estado: ${monitor.running ? '✅ <b>Ativo</b>' : '⏹️ <b>Parado</b>'}
@@ -97,30 +125,31 @@ Iniciado: ${monitor.startTime}
 
 <code>Chat ID: ${chatId}</code>
 `);
+      return;
+    }
+
+    if (text.startsWith('/config')) {
+      const monitor = activeMonitors[chatId] || {
+        pairs: ['BTC/USDT', 'ETH/USDT', 'SOL/USDT'],
+        exchanges: ['binance', 'mexc', 'mercadobitcoin'],
+        minSpread: 1.5,
+        capital: 1000,
+        running: false,
+      };
+
+      const parts = text.split(' ');
+      for (let i = 1; i < parts.length; i++) {
+        const [key, value] = parts[i].split('=');
+        if (!key || !value) continue;
+        if (key === 'min_spread') monitor.minSpread = parseFloat(value);
+        if (key === 'capital') monitor.capital = parseFloat(value);
+        if (key === 'pairs') monitor.pairs = value.split(',');
+        if (key === 'exchanges') monitor.exchanges = value.split(',');
       }
 
-      if (text?.startsWith('/config')) {
-        const monitor = activeMonitors[chatId] || {
-          pairs: ['BTC/USDT', 'ETH/USDT', 'SOL/USDT'],
-          exchanges: ['binance', 'mexc', 'mercadobitcoin'],
-          minSpread: 1.5,
-          capital: 1000,
-          running: false
-        };
+      activeMonitors[chatId] = monitor;
 
-        // Parse: /config min_spread=2.0 capital=5000
-        const parts = text.split(' ');
-        for (let i = 1; i < parts.length; i++) {
-          const [key, value] = parts[i].split('=');
-          if (key === 'min_spread') monitor.minSpread = parseFloat(value);
-          if (key === 'capital') monitor.capital = parseFloat(value);
-          if (key === 'pairs') monitor.pairs = value.split(',');
-          if (key === 'exchanges') monitor.exchanges = value.split(',');
-        }
-
-        activeMonitors[chatId] = monitor;
-
-        return sendMessage(chatId, `
+      await sendMessage(chatId, `
 ⚙️ <b>Configuração Atualizada</b>
 
 📈 Min. Spread: ${monitor.minSpread}%
@@ -130,21 +159,25 @@ Iniciado: ${monitor.startTime}
 
 Use /monitor para iniciar com essas configurações.
 `);
-      }
-
-      // Comando desconhecido
-      return sendMessage(chatId, `❓ Comando não reconhecido.\n\nUse /help para ver os comandos disponíveis.`);
+      return;
     }
 
-    res.status(200).json({ ok: true });
+    await sendMessage(chatId, `❓ Comando não reconhecido.\n\nUse /help para ver os comandos disponíveis.`);
   } catch (error) {
-    console.error('Webhook error:', error);
-    res.status(500).json({ ok: false, error: error.message });
+    console.error('processUpdate error:', error);
   }
-};
+}
 
 async function sendMessage(chatId, text, replyMarkup) {
   try {
+    if (!TOKEN) {
+      console.error('TELEGRAM_BOT_TOKEN não configurado no ambiente');
+      return { ok: false, error: 'missing_token' };
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
     const response = await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -153,11 +186,15 @@ async function sendMessage(chatId, text, replyMarkup) {
         text,
         parse_mode: 'HTML',
         reply_markup: replyMarkup,
-      })
+      }),
+      signal: controller.signal,
     });
+
+    clearTimeout(timeoutId);
     return response.json();
   } catch (error) {
     console.error('Error sending message:', error);
+    return { ok: false, error: String(error?.message || error) };
   }
 }
 
