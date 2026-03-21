@@ -1,0 +1,1594 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CryptoArb — Monitor de Arbitragem</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #080c10;
+    --surface: #0d1117;
+    --border: #1c2333;
+    --border-bright: #2d3748;
+    --text: #e2e8f0;
+    --muted: #4a5568;
+    --accent: #00ff88;
+    --accent2: #ff6b35;
+    --accent3: #7c6af7;
+    --red: #ff4757;
+    --yellow: #ffd32a;
+    --up: #00ff88;
+    --down: #ff4757;
+    --mono: 'Space Mono', monospace;
+    --sans: 'Syne', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Scanline effect */
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,255,136,0.015) 2px,
+      rgba(0,255,136,0.015) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 16px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(13,17,23,0.9);
+    backdrop-filter: blur(10px);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .logo {
+    font-family: var(--sans);
+    font-weight: 800;
+    font-size: 22px;
+    letter-spacing: -0.5px;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .logo-icon {
+    width: 32px; height: 32px;
+    border: 2px solid var(--accent);
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+  }
+
+  .status-bar {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .status-dot {
+    display: flex; align-items: center; gap: 6px;
+  }
+
+  .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: pulse 2s infinite;
+  }
+
+  .dot.inactive { background: var(--muted); animation: none; }
+  .dot.warn { background: var(--yellow); }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.8); }
+  }
+
+  main { padding: 32px; max-width: 1400px; margin: 0 auto; }
+
+  /* Config Panel */
+  .config-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px;
+    margin-bottom: 24px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .config-section::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--accent3), var(--accent), transparent);
+  }
+
+  .section-title {
+    font-family: var(--sans);
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 20px;
+  }
+
+  .config-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr auto;
+    gap: 16px;
+    align-items: end;
+  }
+
+  .field-group { display: flex; flex-direction: column; gap: 8px; }
+
+  label {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  input, select {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-family: var(--mono);
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.2s;
+    width: 100%;
+  }
+
+  input:focus, select:focus { border-color: var(--accent3); }
+  input::placeholder { color: var(--muted); }
+
+  .input-icon {
+    position: relative;
+  }
+
+  .input-icon span {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .btn {
+    padding: 11px 24px;
+    border-radius: 8px;
+    border: none;
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #000;
+  }
+  .btn-primary:hover { filter: brightness(1.1); transform: translateY(-1px); }
+  .btn-primary:disabled { background: var(--muted); color: var(--bg); cursor: not-allowed; transform: none; }
+
+  .btn-outline {
+    background: transparent;
+    border: 1px solid var(--border-bright);
+    color: var(--text);
+  }
+  .btn-outline:hover { border-color: var(--accent3); color: var(--accent3); }
+
+  .btn-danger {
+    background: transparent;
+    border: 1px solid var(--red);
+    color: var(--red);
+  }
+  .btn-danger:hover { background: var(--red); color: #fff; }
+
+  .exchanges-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 16px;
+  }
+
+  .exchange-chip {
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-size: 12px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: all 0.2s;
+    color: var(--muted);
+    user-select: none;
+  }
+
+  .exchange-chip.active {
+    border-color: var(--accent3);
+    color: var(--accent3);
+    background: rgba(124,106,247,0.1);
+  }
+
+  .exchange-chip:hover { border-color: var(--border-bright); color: var(--text); }
+
+  /* Pairs */
+  .pairs-row {
+    display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px;
+  }
+
+  .pair-chip {
+    padding: 5px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: all 0.2s;
+    color: var(--muted);
+  }
+
+  .pair-chip.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(0,255,136,0.08);
+  }
+
+  /* Telegram section */
+  .tg-config {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    gap: 16px;
+    align-items: end;
+  }
+
+  .tg-status {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px;
+    margin-top: 12px;
+  }
+
+  /* Stats row */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .stat-card::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 1px;
+  }
+
+  .stat-card:nth-child(1)::after { background: var(--accent); }
+  .stat-card:nth-child(2)::after { background: var(--accent2); }
+  .stat-card:nth-child(3)::after { background: var(--accent3); }
+  .stat-card:nth-child(4)::after { background: var(--yellow); }
+
+  .stat-label { font-size: 10px; color: var(--muted); letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 8px; }
+  .stat-value { font-family: var(--sans); font-size: 28px; font-weight: 800; }
+  .stat-sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+  /* Table */
+  .table-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .table-header {
+    padding: 20px 28px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .table-title {
+    font-family: var(--sans);
+    font-weight: 700;
+    font-size: 16px;
+  }
+
+  .table-actions { display: flex; gap: 10px; }
+
+  table { width: 100%; border-collapse: collapse; }
+
+  th {
+    padding: 12px 20px;
+    text-align: left;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+    background: rgba(0,0,0,0.2);
+  }
+
+  td {
+    padding: 14px 20px;
+    font-size: 13px;
+    border-bottom: 1px solid rgba(28,35,51,0.5);
+    vertical-align: middle;
+  }
+
+  tr:last-child td { border-bottom: none; }
+
+  tr:hover td { background: rgba(255,255,255,0.02); }
+
+  .arb-row-high { background: rgba(0,255,136,0.03); }
+  .arb-row-high:hover td { background: rgba(0,255,136,0.06) !important; }
+
+  .pair-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 700;
+    font-size: 14px;
+  }
+
+  .exchange-tag {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .ex-binance { background: rgba(243,186,47,0.15); color: #f3ba2f; }
+  .ex-coinbase { background: rgba(22,82,240,0.15); color: #1652f0; }
+  .ex-kraken { background: rgba(94,57,225,0.15); color: #5e39e1; }
+  .ex-okx { background: rgba(255,255,255,0.1); color: #ccc; }
+  .ex-bybit { background: rgba(255,164,28,0.15); color: #ffa41c; }
+  .ex-kucoin { background: rgba(9,179,138,0.15); color: #09b38a; }
+  .ex-mexc { background: rgba(0,180,255,0.15); color: #00b4ff; }
+  .ex-mercadobitcoin { background: rgba(0,160,80,0.15); color: #00c864; }
+  .ex-llamaswap { background: rgba(180,120,255,0.15); color: #b478ff; }
+  .ex-picnic { background: rgba(255,180,50,0.15); color: #ffb432; }
+
+  .price-cell { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+  .spread-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-weight: 700;
+    font-size: 13px;
+  }
+
+  .spread-high { background: rgba(0,255,136,0.15); color: var(--accent); }
+  .spread-med { background: rgba(255,215,0,0.12); color: var(--yellow); }
+  .spread-low { background: rgba(74,85,104,0.3); color: var(--muted); }
+
+  .profit-est { color: var(--accent); font-weight: 700; }
+
+  .action-btn {
+    padding: 5px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .action-btn:hover { border-color: var(--accent3); color: var(--accent3); }
+
+  /* Alerts feed */
+  .alerts-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-top: 24px;
+  }
+
+  .alert-item {
+    padding: 14px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 12px;
+    animation: slideIn 0.3s ease;
+  }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateX(-10px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  .alert-item:last-child { border-bottom: none; }
+
+  .alert-time { color: var(--muted); font-size: 11px; min-width: 60px; }
+  .alert-icon { font-size: 16px; }
+  .alert-text { flex: 1; }
+  .alert-spread { color: var(--accent); font-weight: 700; }
+
+  .empty-state {
+    padding: 48px;
+    text-align: center;
+    color: var(--muted);
+  }
+
+  .empty-state .big { font-size: 40px; margin-bottom: 12px; }
+  .empty-state p { font-size: 13px; line-height: 1.8; }
+
+  /* Toast */
+  .toast-container {
+    position: fixed;
+    bottom: 32px;
+    right: 32px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .toast {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 20px;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    animation: toastIn 0.3s ease;
+    min-width: 280px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  }
+
+  @keyframes toastIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .toast.success { border-left: 3px solid var(--accent); }
+  .toast.warn { border-left: 3px solid var(--yellow); }
+  .toast.error { border-left: 3px solid var(--red); }
+
+  .ticker-bar {
+    background: rgba(0,255,136,0.04);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    overflow: hidden;
+    padding: 8px 0;
+    margin-bottom: 24px;
+  }
+
+  .ticker-inner {
+    display: flex;
+    gap: 48px;
+    white-space: nowrap;
+    animation: scroll 30s linear infinite;
+    font-size: 12px;
+  }
+
+  @keyframes scroll {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+
+  .ticker-item { display: flex; align-items: center; gap: 8px; }
+  .ticker-price { font-weight: 700; }
+  .ticker-change.up { color: var(--up); }
+  .ticker-change.down { color: var(--down); }
+
+  /* Responsive */
+  @media (max-width: 900px) {
+    .config-grid { grid-template-columns: 1fr 1fr; }
+    .stats-row { grid-template-columns: repeat(2, 1fr); }
+    .tg-config { grid-template-columns: 1fr; }
+    main { padding: 16px; }
+  }
+
+  .running-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--accent);
+  }
+
+  .btn-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 20px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">₿</div>
+    CryptoArb
+  </div>
+  <div class="status-bar">
+    <div class="status-dot" id="monitorStatus">
+      <div class="dot inactive" id="statusDot"></div>
+      <span id="statusText">Parado</span>
+    </div>
+    <span id="lastUpdate" style="color:var(--muted);font-size:11px">—</span>
+    <span id="alertCount" style="color:var(--accent3);font-size:11px">0 alertas enviados</span>
+  </div>
+</header>
+
+<main>
+
+  <!-- Ticker -->
+  <div class="ticker-bar">
+    <div class="ticker-inner" id="tickerInner">
+      <!-- populated by JS -->
+    </div>
+  </div>
+
+  <!-- Telegram Config -->
+  <div class="config-section">
+    <div class="section-title">⚡ Configuração Telegram</div>
+    <div class="tg-config">
+      <div class="field-group">
+        <label>Bot Token</label>
+        <input type="password" id="botToken" placeholder="1234567890:ABCDEFGHijklmno..." />
+      </div>
+      <div class="field-group">
+        <label>Chat ID</label>
+        <input type="text" id="chatId" placeholder="-1001234567890" />
+      </div>
+      <button class="btn btn-outline" onclick="testTelegram()">Testar Bot</button>
+    </div>
+    <div class="tg-status" id="tgStatus" style="display:none">
+      <div class="dot" id="tgDot"></div>
+      <span id="tgStatusText">—</span>
+    </div>
+    <details style="margin-top:16px">
+      <summary style="font-size:12px; color:var(--muted); cursor:pointer; user-select:none">Como criar seu Bot Telegram? ▸</summary>
+      <div style="margin-top:12px; font-size:12px; color:var(--muted); line-height:2; background:var(--bg); padding:16px; border-radius:8px; border:1px solid var(--border)">
+        1. Abra o Telegram e busque <strong style="color:var(--text)">@BotFather</strong><br>
+        2. Envie <code style="color:var(--accent)">/newbot</code> e siga as instruções<br>
+        3. Copie o <strong style="color:var(--text)">Token</strong> recebido e cole acima<br>
+        4. Para obter o Chat ID: envie uma mensagem pro seu bot e acesse:<br>
+        <code style="color:var(--accent)">https://api.telegram.org/bot&lt;TOKEN&gt;/getUpdates</code><br>
+        5. Copie o valor de <code style="color:var(--accent)">"id"</code> dentro de <code>"chat"</code>
+      </div>
+    </details>
+  </div>
+
+  <!-- Monitor Config -->
+  <div class="config-section">
+    <div class="section-title">⚙ Parâmetros do Monitor</div>
+    <div class="config-grid">
+      <div class="field-group">
+        <label>Spread Mínimo (%)</label>
+        <div class="input-icon">
+          <input type="number" id="minSpread" value="1.0" step="0.1" min="0.1" max="20" />
+          <span>%</span>
+        </div>
+      </div>
+      <div class="field-group">
+        <label>Intervalo de Verificação</label>
+        <select id="interval">
+          <option value="10000">10 segundos</option>
+          <option value="30000" selected>30 segundos</option>
+          <option value="60000">1 minuto</option>
+          <option value="300000">5 minutos</option>
+        </select>
+      </div>
+      <div class="field-group">
+        <label>Cooldown de Alerta</label>
+        <select id="cooldown">
+          <option value="60000">1 minuto</option>
+          <option value="300000" selected>5 minutos</option>
+          <option value="600000">10 minutos</option>
+          <option value="1800000">30 minutos</option>
+        </select>
+      </div>
+      <div class="field-group">
+        <label>Capital (USD)</label>
+        <div class="input-icon">
+          <input type="number" id="capital" value="1000" step="100" min="100" />
+          <span>$</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:20px">
+      <label>Exchanges Monitoradas</label>
+      <div class="exchanges-row" id="exchangeChips"></div>
+    </div>
+
+    <div style="margin-top:12px; font-size:11px; color:var(--muted); background:rgba(180,120,255,0.06); border:1px solid rgba(180,120,255,0.2); border-radius:8px; padding:10px 14px; line-height:1.8">
+      🦙 <strong style="color:#b478ff">LlamaSwap</strong> e 🧺 <strong style="color:#ffb432">Picnic</strong> são DEXs — preços via <strong style="color:var(--text)">API gratuita DefiLlama</strong> (coins.llama.fi), que agrega preços on-chain em tempo real da Polygon e outras chains. A diferença entre DEX e CEX é a principal fonte de arbitragem!
+    </div>
+
+    <div style="margin-top:10px">
+      <label>Pares de Moedas</label>
+      <div class="pairs-row" id="pairChips"></div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" id="startBtn" onclick="toggleMonitor()">▶ Iniciar Monitor</button>
+      <button class="btn btn-outline" onclick="fetchOnce()">↻ Verificar Agora</button>
+      <div id="runningText" class="running-indicator" style="display:none">
+        <div class="dot"></div>
+        <span>Monitorando ao vivo...</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-label">Oportunidades Ativas</div>
+      <div class="stat-value" id="statOpps" style="color:var(--accent)">0</div>
+      <div class="stat-sub">acima do spread mínimo</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Maior Spread</div>
+      <div class="stat-value" id="statBest" style="color:var(--accent2)">—</div>
+      <div class="stat-sub" id="statBestPair">nenhuma verificação</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Alertas Enviados</div>
+      <div class="stat-value" id="statAlerts" style="color:var(--accent3)">0</div>
+      <div class="stat-sub">nesta sessão</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Lucro Potencial Est.</div>
+      <div class="stat-value" id="statProfit" style="color:var(--yellow)">$0</div>
+      <div class="stat-sub" id="statProfitSub">baseado no capital configurado</div>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="table-section">
+    <div class="table-header">
+      <div class="table-title">Comparativo de Preços</div>
+      <div class="table-actions">
+        <button class="btn btn-outline" style="font-size:11px;padding:7px 14px" onclick="sortTable()">Ordenar por Spread</button>
+      </div>
+    </div>
+    <div id="tableContainer">
+      <div class="empty-state">
+        <div class="big">📡</div>
+        <p>Clique em <strong>Iniciar Monitor</strong> para começar a capturar<br>preços em tempo real das exchanges.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Triangular Arbitrage -->
+  <div class="table-section" style="margin-top:24px">
+    <div class="table-header">
+      <div class="table-title">🔺 Arbitragem Triangular</div>
+      <div style="font-size:11px;color:var(--muted)">A→B→C→A • lucro líquido após fees</div>
+    </div>
+    <div style="padding:12px 20px; background:rgba(124,106,247,0.06); border-bottom:1px solid var(--border); font-size:11px; color:var(--muted); line-height:1.8">
+      🔺 <strong style="color:var(--accent3)">Como funciona:</strong> começa com USDT → compra moeda A → converte para moeda B → volta pra USDT. Se o produto dos 3 preços &gt; 1 após fees, é lucro!
+      &nbsp;|&nbsp; Ex: <span style="color:var(--accent)">USDT → XRP → BRZ → USDT</span>
+    </div>
+    <div id="triangularContainer">
+      <div class="empty-state">
+        <div class="big">🔺</div>
+        <p>Inicie o monitor para escanear rotas triangulares.<br>Serão testadas automaticamente todas as combinações possíveis.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Alerts Log -->
+  <div class="alerts-panel">
+    <div class="table-header">
+      <div class="table-title">📬 Log de Alertas Telegram</div>
+      <button class="btn btn-danger" style="font-size:11px;padding:7px 14px" onclick="clearAlerts()">Limpar</button>
+    </div>
+    <div id="alertsLog">
+      <div class="empty-state">
+        <div class="big">🔔</div>
+        <p>Quando uma oportunidade de arbitragem for encontrada,<br>o alerta aparecerá aqui e será enviado ao Telegram.</p>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+// ============================================
+// STATE
+// ============================================
+const state = {
+  running: false,
+  intervalId: null,
+  alerts: [],
+  alertsSent: 0,
+  lastAlertTime: {},
+  priceData: {},
+  sortDesc: true,
+  exchanges: ['binance','coinbase','kraken','okx','bybit','kucoin','mexc','mercadobitcoin','llamaswap','picnic'],
+  activeExchanges: ['binance','mexc','mercadobitcoin','bybit','llamaswap','picnic'],
+  pairs: [
+    'XRP/USDT','XRP/BRL',
+    'POL/USDT','MATIC/USDT',
+    'SOL/USDT','SOL/BRL',
+    'ETH/USDT','ETH/BRL',
+    'DOGE/USDT','DOGE/BRL',
+    'LTC/USDT','LTC/BRL',
+    'LINK/USDT','LINK/BRL',
+    'AVAX/USDT','AVAX/BRL',
+    'ADA/USDT','ADA/BRL',
+    'SHIB/USDT',
+    'DOT/USDT',
+    'USDT/BRL',
+    'BRZ/USDT','BRZ/BRL',
+  ],
+  activePairs: ['XRP/USDT','XRP/BRL','SOL/USDT','DOGE/USDT','LTC/USDT','LINK/USDT','USDT/BRL','BRZ/USDT','BRZ/BRL'],
+};
+
+// ============================================
+// EXCHANGE DISPLAY
+// ============================================
+const exchangeInfo = {
+  binance:        { name: 'Binance',         cls: 'ex-binance',         emoji: '🟡' },
+  coinbase:       { name: 'Coinbase',        cls: 'ex-coinbase',        emoji: '🔵' },
+  kraken:         { name: 'Kraken',          cls: 'ex-kraken',          emoji: '🟣' },
+  okx:            { name: 'OKX',             cls: 'ex-okx',             emoji: '⬜' },
+  bybit:          { name: 'Bybit',           cls: 'ex-bybit',           emoji: '🟠' },
+  kucoin:         { name: 'KuCoin',          cls: 'ex-kucoin',          emoji: '🟢' },
+  mexc:           { name: 'MEXC',            cls: 'ex-mexc',            emoji: '🔷' },
+  mercadobitcoin: { name: 'Mercado Bitcoin', cls: 'ex-mercadobitcoin',  emoji: '🇧🇷' },
+  llamaswap:      { name: 'LlamaSwap',       cls: 'ex-llamaswap',       emoji: '🦙' },
+  picnic:         { name: 'Picnic',          cls: 'ex-picnic',          emoji: '🧺' },
+};
+
+// ============================================
+// INIT CHIPS
+// ============================================
+function initChips() {
+  const ec = document.getElementById('exchangeChips');
+  ec.innerHTML = state.exchanges.map(ex => `
+    <div class="exchange-chip ${state.activeExchanges.includes(ex) ? 'active' : ''}"
+         onclick="toggleExchange('${ex}')" id="exc_${ex}">
+      ${exchangeInfo[ex].emoji} ${exchangeInfo[ex].name}
+    </div>
+  `).join('');
+
+  const pc = document.getElementById('pairChips');
+  pc.innerHTML = state.pairs.map(p => `
+    <div class="pair-chip ${state.activePairs.includes(p) ? 'active' : ''}"
+         onclick="togglePair('${p}')" id="pair_${p.replace('/','_')}">
+      ${p}
+    </div>
+  `).join('');
+}
+
+function toggleExchange(ex) {
+  const idx = state.activeExchanges.indexOf(ex);
+  if (idx > -1) {
+    if (state.activeExchanges.length <= 2) { toast('Selecione ao menos 2 exchanges.', 'warn'); return; }
+    state.activeExchanges.splice(idx, 1);
+  } else {
+    state.activeExchanges.push(ex);
+  }
+  document.getElementById('exc_' + ex).classList.toggle('active');
+}
+
+function togglePair(p) {
+  const idx = state.activePairs.indexOf(p);
+  if (idx > -1) {
+    if (state.activePairs.length <= 1) { toast('Selecione ao menos 1 par.', 'warn'); return; }
+    state.activePairs.splice(idx, 1);
+  } else {
+    state.activePairs.push(p);
+  }
+  document.getElementById('pair_' + p.replace('/','_')).classList.toggle('active');
+}
+
+// ============================================
+// PRICE FETCHING — Uses real public APIs (CORS-friendly)
+// ============================================
+
+// Mapa de tokens para IDs do DefiLlama (coingecko IDs)
+const defillamaTokenMap = {
+  'XRP':  'coingecko:ripple',
+  'SOL':  'coingecko:solana',
+  'ETH':  'coingecko:ethereum',
+  'DOGE': 'coingecko:dogecoin',
+  'LTC':  'coingecko:litecoin',
+  'LINK': 'coingecko:chainlink',
+  'AVAX': 'coingecko:avalanche-2',
+  'ADA':  'coingecko:cardano',
+  'SHIB': 'coingecko:shiba-inu',
+  'DOT':  'coingecko:polkadot',
+  'POL':  'coingecko:polygon-ecosystem-token',
+  'MATIC':'coingecko:matic-network',
+  'USDT': 'coingecko:tether',
+  'BRZ':  'coingecko:brazilian-digital-token',
+};
+
+// Cache do DefiLlama para não bater a API toda vez
+let defillamaCache = {};
+let defillamaCacheTime = 0;
+
+async function fetchDefillamaPrices() {
+  const now = Date.now();
+  if (now - defillamaCacheTime < 20000 && Object.keys(defillamaCache).length > 0) {
+    return defillamaCache; // cache de 20s
+  }
+  try {
+    const coins = Object.values(defillamaTokenMap).join(',');
+    const r = await fetch(`https://coins.llama.fi/prices/current/${coins}?searchWidth=4h`);
+    const d = await r.json();
+    defillamaCache = d.coins || {};
+    defillamaCacheTime = now;
+    return defillamaCache;
+  } catch { return defillamaCache; }
+}
+
+async function fetchDefillamaPrice(symbol) {
+  try {
+    const [base] = symbol.split('/');
+    const tokenId = defillamaTokenMap[base];
+    if (!tokenId) return null;
+    const prices = await fetchDefillamaPrices();
+    const price = prices[tokenId]?.price;
+    if (!price) return null;
+    // Para pares BRL, converter USD → BRL
+    if (symbol.endsWith('/BRL')) {
+      let brlRate = 5.7;
+      try {
+        const fx = await fetch('https://api.frankfurter.app/latest?from=USD&to=BRL');
+        const fxd = await fx.json();
+        brlRate = fxd.rates?.BRL || brlRate;
+      } catch {}
+      return price * brlRate;
+    }
+    return price;
+  } catch { return null; }
+}
+
+async function fetchBinancePrice(symbol) {
+  try {
+    const sym = symbol.replace('/','');
+    const r = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${sym}`);
+    const d = await r.json();
+    return parseFloat(d.price);
+  } catch { return null; }
+}
+
+async function fetchCoinbasePrice(symbol) {
+  try {
+    const [base, quote] = symbol.split('/');
+    const r = await fetch(`https://api.coinbase.com/v2/prices/${base}-${quote}/spot`);
+    const d = await r.json();
+    return parseFloat(d.data?.amount);
+  } catch { return null; }
+}
+
+async function fetchKrakenPrice(symbol) {
+  try {
+    const map = {
+      'XRP/USDT':   'XRPUSDT',
+      'ETH/USDT':   'ETHUSDT',
+      'SOL/USDT':   'SOLUSDT',
+      'DOGE/USDT':  'XDGUSDT',
+      'LTC/USDT':   'LTCUSDT',
+      'LINK/USDT':  'LINKUSDT',
+      'AVAX/USDT':  'AVAXUSDT',
+      'ADA/USDT':   'ADAUSDT',
+      'DOT/USDT':   'DOTUSDT',
+      'MATIC/USDT': 'MATICUSDT',
+      'POL/USDT':   'POLUSDT',
+    };
+    const pair = map[symbol];
+    if (!pair) return null;
+    const r = await fetch(`https://api.kraken.com/0/public/Ticker?pair=${pair}`);
+    const d = await r.json();
+    const key = Object.keys(d.result || {})[0];
+    if (!key) return null;
+    return parseFloat(d.result[key].c[0]);
+  } catch { return null; }
+}
+
+async function fetchOKXPrice(symbol) {
+  try {
+    const [base, quote] = symbol.split('/');
+    const r = await fetch(`https://www.okx.com/api/v5/market/ticker?instId=${base}-${quote}`);
+    const d = await r.json();
+    return parseFloat(d.data?.[0]?.last);
+  } catch { return null; }
+}
+
+async function fetchKuCoinPrice(symbol) {
+  try {
+    const sym = symbol.replace('/', '-');
+    const r = await fetch(`https://api.kucoin.com/api/v1/market/orderbook/level1?symbol=${sym}`);
+    const d = await r.json();
+    return parseFloat(d.data?.price);
+  } catch { return null; }
+}
+
+async function fetchBybitPrice(symbol) {
+  try {
+    const sym = symbol.replace('/', '');
+    const r = await fetch(`https://api.bybit.com/v5/market/tickers?category=spot&symbol=${sym}`);
+    const d = await r.json();
+    return parseFloat(d.result?.list?.[0]?.lastPrice);
+  } catch { return null; }
+}
+
+async function fetchMEXCPrice(symbol) {
+  try {
+    const sym = symbol.replace('/', '_');
+    const r = await fetch(`https://api.mexc.com/api/v3/ticker/price?symbol=${symbol.replace('/','')}`);
+    const d = await r.json();
+    return parseFloat(d.price);
+  } catch { return null; }
+}
+
+async function fetchMercadoBitcoinPrice(symbol) {
+  try {
+    // coin: ticker no MB | brl: true = precisa converter pra USD
+    const mbMap = {
+      'XRP/USDT':   { coin: 'XRP',   brl: true },
+      'XRP/BRL':    { coin: 'XRP',   brl: false },
+      'ETH/USDT':   { coin: 'ETH',   brl: true },
+      'ETH/BRL':    { coin: 'ETH',   brl: false },
+      'SOL/USDT':   { coin: 'SOL',   brl: true },
+      'SOL/BRL':    { coin: 'SOL',   brl: false },
+      'DOGE/USDT':  { coin: 'DOGE',  brl: true },
+      'DOGE/BRL':   { coin: 'DOGE',  brl: false },
+      'LTC/USDT':   { coin: 'LTC',   brl: true },
+      'LTC/BRL':    { coin: 'LTC',   brl: false },
+      'LINK/USDT':  { coin: 'LINK',  brl: true },
+      'LINK/BRL':   { coin: 'LINK',  brl: false },
+      'AVAX/USDT':  { coin: 'AVAX',  brl: true },
+      'AVAX/BRL':   { coin: 'AVAX',  brl: false },
+      'ADA/USDT':   { coin: 'ADA',   brl: true },
+      'ADA/BRL':    { coin: 'ADA',   brl: false },
+      'SHIB/USDT':  { coin: 'SHIB',  brl: true },
+      'DOT/USDT':   { coin: 'DOT',   brl: true },
+      'POL/USDT':   { coin: 'POL',   brl: true },
+      'POL/BRL':    { coin: 'POL',   brl: false },
+      'MATIC/USDT': { coin: 'MATIC', brl: true },
+      'USDT/BRL':   { coin: 'USDT',  brl: false },
+      'BRZ/USDT':   { coin: 'BRZ',   brl: true  },
+      'BRZ/BRL':    { coin: 'BRZ',   brl: false },
+    };
+    const cfg = mbMap[symbol];
+    if (!cfg) return null;
+    const r = await fetch(`https://www.mercadobitcoin.net/api/${cfg.coin}/ticker/`);
+    const d = await r.json();
+    const priceBRL = parseFloat(d.ticker?.last);
+    if (!priceBRL) return null;
+    if (!cfg.brl) return priceBRL;
+    // Converte BRL → USD
+    let usdRate = 1/5.7;
+    try {
+      const fx = await fetch('https://api.frankfurter.app/latest?from=BRL&to=USD');
+      const fxd = await fx.json();
+      usdRate = fxd.rates?.USD || usdRate;
+    } catch {}
+    return priceBRL * usdRate;
+  } catch { return null; }
+}
+
+async function fetchAllPrices() {
+  const results = {};
+
+  for (const pair of state.activePairs) {
+    results[pair] = {};
+
+    const fetchers = {
+      binance:        () => fetchBinancePrice(pair),
+      coinbase:       () => fetchCoinbasePrice(pair),
+      kraken:         () => fetchKrakenPrice(pair),
+      okx:            () => fetchOKXPrice(pair),
+      bybit:          () => fetchBybitPrice(pair),
+      mexc:           () => fetchMEXCPrice(pair),
+      mercadobitcoin: () => fetchMercadoBitcoinPrice(pair),
+      kucoin:         () => fetchKuCoinPrice(pair),
+      llamaswap:      () => fetchDefillamaPrice(pair),  // LlamaSwap usa DefiLlama por baixo
+      picnic:         () => fetchDefillamaPrice(pair),  // Picnic opera na Polygon — preços via DefiLlama
+    };
+
+    const promises = state.activeExchanges.map(async ex => {
+      try {
+        const price = await fetchers[ex]?.();
+        if (price && !isNaN(price) && price > 0) {
+          results[pair][ex] = price;
+        }
+      } catch {}
+    });
+
+    await Promise.allSettled(promises);
+  }
+
+  return results;
+}
+
+// ============================================
+// ARBITRAGE CALCULATION
+// ============================================
+function calcArbitrage(priceData) {
+  const opps = [];
+
+  for (const [pair, prices] of Object.entries(priceData)) {
+    const exList = Object.entries(prices).filter(([,p]) => p && p > 0);
+    if (exList.length < 2) continue;
+
+    let minEx = null, maxEx = null, minP = Infinity, maxP = -Infinity;
+    for (const [ex, p] of exList) {
+      if (p < minP) { minP = p; minEx = ex; }
+      if (p > maxP) { maxP = p; maxEx = ex; }
+    }
+
+    const spread = ((maxP - minP) / minP) * 100;
+    const capital = parseFloat(document.getElementById('capital').value) || 1000;
+    // Descontar 0,20% na compra e 0,20% na venda
+    const afterFees = capital * (1 - 0.002) * (maxP / minP) * (1 - 0.002);
+    const profit = afterFees - capital;
+    const profitPct = (profit / capital) * 100;
+
+    opps.push({
+      pair, spread, profitPct, minEx, maxEx, minP, maxP,
+      profit, allPrices: exList,
+    });
+  }
+
+  return opps.sort((a, b) => b.spread - a.spread);
+}
+
+// ============================================
+// TRIANGULAR ARBITRAGE
+// ============================================
+
+// Fees por exchange — 0,20% padrão em todas
+const EXCHANGE_FEES = {
+  binance: 0.002, coinbase: 0.002, kraken: 0.002,
+  okx: 0.002, bybit: 0.002, kucoin: 0.002,
+  mexc: 0.002, mercadobitcoin: 0.002,
+  llamaswap: 0.002, picnic: 0.002,
+};
+
+// Rotas triangulares focadas no seu perfil
+const TRIANGULAR_ROUTES = [
+  // USDT como base — rotas clássicas
+  { a: 'USDT', b: 'XRP',  c: 'BRZ',  label: 'USDT→XRP→BRZ→USDT'  },
+  { a: 'USDT', b: 'XRP',  c: 'SOL',  label: 'USDT→XRP→SOL→USDT'  },
+  { a: 'USDT', b: 'SOL',  c: 'XRP',  label: 'USDT→SOL→XRP→USDT'  },
+  { a: 'USDT', b: 'XRP',  c: 'ETH',  label: 'USDT→XRP→ETH→USDT'  },
+  { a: 'USDT', b: 'SOL',  c: 'ETH',  label: 'USDT→SOL→ETH→USDT'  },
+  { a: 'USDT', b: 'XRP',  c: 'DOGE', label: 'USDT→XRP→DOGE→USDT' },
+  { a: 'USDT', b: 'XRP',  c: 'LTC',  label: 'USDT→XRP→LTC→USDT'  },
+  { a: 'USDT', b: 'XRP',  c: 'LINK', label: 'USDT→XRP→LINK→USDT' },
+  { a: 'USDT', b: 'BRZ',  c: 'XRP',  label: 'USDT→BRZ→XRP→USDT'  },
+  { a: 'USDT', b: 'SOL',  c: 'DOGE', label: 'USDT→SOL→DOGE→USDT' },
+  { a: 'USDT', b: 'SOL',  c: 'ADA',  label: 'USDT→SOL→ADA→USDT'  },
+  { a: 'USDT', b: 'XRP',  c: 'ADA',  label: 'USDT→XRP→ADA→USDT'  },
+  { a: 'USDT', b: 'XRP',  c: 'AVAX', label: 'USDT→XRP→AVAX→USDT' },
+  { a: 'USDT', b: 'DOGE', c: 'XRP',  label: 'USDT→DOGE→XRP→USDT' },
+  { a: 'USDT', b: 'LTC',  c: 'XRP',  label: 'USDT→LTC→XRP→USDT'  },
+  // BRZ como pivot — oportunidade Brasil
+  { a: 'BRZ',  b: 'XRP',  c: 'USDT', label: 'BRZ→XRP→USDT→BRZ'  },
+  { a: 'BRZ',  b: 'SOL',  c: 'USDT', label: 'BRZ→SOL→USDT→BRZ'  },
+  { a: 'BRZ',  b: 'DOGE', c: 'USDT', label: 'BRZ→DOGE→USDT→BRZ' },
+];
+
+function calcTriangular(priceData) {
+  const capital = parseFloat(document.getElementById('capital').value) || 1000;
+  const results = [];
+
+  // Montar tabela de preços: token → preço em USDT (média entre exchanges disponíveis)
+  const avgPrices = {};
+  const allPricesFlat = {};
+
+  for (const [pair, prices] of Object.entries(priceData)) {
+    const [base, quote] = pair.split('/');
+    const vals = Object.entries(prices).filter(([,p]) => p && p > 0);
+    if (!vals.length) continue;
+
+    // Para pares em USDT: preço direto
+    if (quote === 'USDT') {
+      // Guardar por exchange também
+      for (const [ex, p] of vals) {
+        if (!allPricesFlat[base]) allPricesFlat[base] = {};
+        allPricesFlat[base][ex] = p;
+      }
+      avgPrices[base] = vals.reduce((s,[,p]) => s+p, 0) / vals.length;
+    }
+    // Para BRZ/USDT: preço do BRZ em USDT
+    if (base === 'BRZ' && quote === 'USDT') {
+      avgPrices['BRZ'] = vals.reduce((s,[,p]) => s+p, 0) / vals.length;
+    }
+  }
+
+  for (const route of TRIANGULAR_ROUTES) {
+    const { a, b, c, label } = route;
+
+    // Precisamos: preço de B em A, preço de C em B, preço de A em C
+    // Simplificado via USD como denominador comum
+    const priceA = a === 'USDT' ? 1 : avgPrices[a];
+    const priceB = b === 'USDT' ? 1 : avgPrices[b];
+    const priceC = c === 'USDT' ? 1 : avgPrices[c];
+
+    if (!priceA || !priceB || !priceC) continue;
+
+    // Leg 1: A → B  (comprar B com A)
+    // Leg 2: B → C  (comprar C com B)
+    // Leg 3: C → A  (comprar A com C)
+    // Produto = (1/priceB_in_A) * (priceB_in_C_ratio) ...
+    // Cálculo direto: começamos com capital em A
+    // Convertemos para B: capital / (priceB/priceA) = capital * priceA / priceB
+    // Convertemos para C: * priceB / priceC
+    // Convertemos para A: * priceC / priceA
+    // Produto total = (priceA/priceB) * (priceB/priceC) * (priceC/priceA) = 1 (sem ineficiência)
+    // Com ineficiência: usamos preços de exchanges diferentes
+
+    // Estratégia: comprar B no mais barato, vender C no mais caro
+    const priceBmin = allPricesFlat[b] ? Math.min(...Object.values(allPricesFlat[b])) : priceB;
+    const priceCmax = allPricesFlat[c] ? Math.max(...Object.values(allPricesFlat[c])) : priceC;
+    const priceCmin = allPricesFlat[c] ? Math.min(...Object.values(allPricesFlat[c])) : priceC;
+
+    const buyBEx  = allPricesFlat[b] ? Object.entries(allPricesFlat[b]).find(([,p]) => p === priceBmin)?.[0] : '?';
+    const sellCEx = allPricesFlat[c] ? Object.entries(allPricesFlat[c]).find(([,p]) => p === priceCmax)?.[0] : '?';
+
+    // Fee total das 3 pernas (fee de cada exchange)
+    const fee1 = EXCHANGE_FEES[buyBEx]  || 0.002;
+    const fee2 = EXCHANGE_FEES[sellCEx] || 0.002;
+    const fee3 = 0.002; // 0,20% na 3a perna
+
+    // Calcular produto da rota com preços reais
+    let amount = capital; // começa em USDT (ou A)
+
+    // Leg1: comprar B
+    amount = amount / priceBmin;         // agora em B
+    amount = amount * (1 - fee1);
+
+    // Leg2: vender B por C (usando taxa cruzada)
+    // preço de C em termos de B = priceC / priceB
+    const ratioBC = priceCmin / priceBmin;
+    amount = amount / ratioBC;           // agora em C
+    amount = amount * (1 - fee2);
+
+    // Leg3: vender C por A (USDT)
+    amount = amount * priceCmax;         // volta pra USDT
+    amount = amount * (1 - fee3);
+
+    const profit = amount - capital;
+    const profitPct = (profit / capital) * 100;
+
+    results.push({
+      label, a, b, c,
+      profitPct, profit, capital,
+      buyBEx, sellCEx,
+      priceBmin, priceCmax,
+      viable: profitPct > 0,
+    });
+  }
+
+  return results.sort((x, y) => y.profitPct - x.profitPct);
+}
+
+function renderTriangular(routes) {
+  if (!routes.length) return;
+
+  const minPct = parseFloat(document.getElementById('minSpread').value) || 1.0;
+  const viable = routes.filter(r => r.profitPct >= minPct);
+
+  const rows = routes.slice(0, 20).map(r => {
+    const cls    = r.profitPct >= minPct ? 'spread-high' : r.profitPct > 0 ? 'spread-med' : 'spread-low';
+    const rowCls = r.profitPct >= minPct ? 'arb-row-high' : '';
+    const arrow  = r.profitPct >= minPct ? '🚨' : r.profitPct > 0 ? '✅' : '❌';
+    const exBuy  = exchangeInfo[r.buyBEx]?.name  || r.buyBEx  || '?';
+    const exSell = exchangeInfo[r.sellCEx]?.name || r.sellCEx || '?';
+
+    return `
+      <tr class="${rowCls}">
+        <td style="font-size:12px">${arrow} <strong>${r.label}</strong></td>
+        <td>
+          <span class="exchange-tag ${exchangeInfo[r.buyBEx]?.cls||''}">${exBuy}</span>
+          <span style="color:var(--muted);margin:0 4px;font-size:11px">$${fmtPrice(r.priceBmin)}</span>
+        </td>
+        <td>
+          <span class="exchange-tag ${exchangeInfo[r.sellCEx]?.cls||''}">${exSell}</span>
+          <span style="color:var(--muted);margin:0 4px;font-size:11px">$${fmtPrice(r.priceCmax)}</span>
+        </td>
+        <td><span class="spread-badge ${cls}">${r.profitPct >= 0 ? '+' : ''}${r.profitPct.toFixed(3)}%</span></td>
+        <td class="${r.profit >= 0 ? 'profit-est' : ''}" style="${r.profit < 0 ? 'color:var(--red)' : ''}">
+          ${r.profit >= 0 ? '+' : ''}$${r.profit.toFixed(2)}
+        </td>
+        <td>
+          <button class="action-btn" onclick="sendTriangularAlert('${r.label}',${r.profitPct.toFixed(3)},${r.profit.toFixed(2)},'${r.buyBEx}','${r.sellCEx}')">📤</button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  document.getElementById('triangularContainer').innerHTML = `
+    <div style="padding:10px 20px;font-size:11px;color:var(--muted);border-bottom:1px solid var(--border)">
+      <span style="color:var(--accent)">🚨 ${viable.length} rotas acima de ${minPct}%</span>
+      &nbsp;|&nbsp; ${routes.filter(r=>r.profitPct>0).length} rotas positivas
+      &nbsp;|&nbsp; ${routes.length} rotas testadas
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Rota Triangular</th>
+          <th>Comprar B em</th>
+          <th>Vender C em</th>
+          <th>Lucro %</th>
+          <th>Lucro $</th>
+          <th>Alerta</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+async function sendTriangularAlert(label, pct, profit, buyEx, sellEx) {
+  const capital = parseFloat(document.getElementById('capital').value) || 1000;
+  const ts = new Date().toLocaleTimeString('pt-BR');
+  const ex1 = exchangeInfo[buyEx]?.name || buyEx;
+  const ex2 = exchangeInfo[sellEx]?.name || sellEx;
+  const emoji = pct >= 2 ? '🚨' : '🔺';
+  const msg = `${emoji} <b>ARBITRAGEM TRIANGULAR</b>\n\n` +
+    `🔄 <b>Rota:</b> ${label}\n` +
+    `📈 <b>Lucro:</b> +${pct}% (+$${profit})\n` +
+    `💰 <b>Capital:</b> $${capital}\n\n` +
+    `📥 Comprar em: <b>${ex1}</b>\n` +
+    `📤 Vender em: <b>${ex2}</b>\n\n` +
+    `⚡ ${ts} | Verifique fees antes de executar!`;
+  const ok = await sendTelegram(msg);
+  if (ok) toast(`🔺 Alerta triangular enviado!`, 'success');
+  else toast('Configure o Telegram primeiro.', 'warn');
+}
+function renderTable(opps) {
+  if (!opps.length) return;
+
+  const minSpread = parseFloat(document.getElementById('minSpread').value) || 1.0;
+  const activeOpps = opps.filter(o => o.profitPct >= minSpread);
+
+  document.getElementById('statOpps').textContent = activeOpps.length;
+  if (opps[0]) {
+    document.getElementById('statBest').textContent = opps[0].profitPct.toFixed(2) + '%';
+    document.getElementById('statBestPair').textContent = opps[0].pair;
+    const totalProfit = activeOpps.reduce((s, o) => s + o.profit, 0);
+    document.getElementById('statProfit').textContent = '$' + totalProfit.toFixed(2);
+    document.getElementById('statProfitSub').textContent = 'líquido após fees (0,20%)';
+  }
+
+  const rows = opps.map(o => {
+    const spreadClass = o.profitPct >= 2 ? 'spread-high' : o.profitPct >= minSpread ? 'spread-med' : 'spread-low';
+    const rowClass = o.profitPct >= minSpread ? 'arb-row-high' : '';
+    const pricesHtml = o.allPrices.map(([ex, p]) =>
+      `<span class="exchange-tag ${exchangeInfo[ex]?.cls || ''}" style="margin:2px">${exchangeInfo[ex]?.name || ex}: $${fmtPrice(p)}</span>`
+    ).join('');
+
+    return `
+      <tr class="${rowClass}">
+        <td><span class="pair-badge">${o.pair}</span></td>
+        <td>
+          <span class="exchange-tag ${exchangeInfo[o.minEx]?.cls || ''}">${exchangeInfo[o.minEx]?.name || o.minEx}</span>
+          <span style="color:var(--muted);margin:0 6px">$${fmtPrice(o.minP)}</span>
+        </td>
+        <td>
+          <span class="exchange-tag ${exchangeInfo[o.maxEx]?.cls || ''}">${exchangeInfo[o.maxEx]?.name || o.maxEx}</span>
+          <span style="color:var(--muted);margin:0 6px">$${fmtPrice(o.maxP)}</span>
+        </td>
+        <td>
+          <span class="spread-badge ${spreadClass}">▲ ${o.spread.toFixed(3)}%</span>
+          <span style="font-size:10px;color:var(--muted);display:block;margin-top:2px">líq: ${o.profitPct.toFixed(3)}%</span>
+        </td>
+        <td class="${o.profit > 0 ? 'profit-est' : ''}" style="${o.profit <= 0 ? 'color:var(--red)' : ''}">
+          ${o.profit > 0 ? '+' : ''}$${o.profit.toFixed(2)}
+          <span style="font-size:10px;color:var(--muted);display:block">após fees</span>
+        </td>
+        <td><div style="display:flex;flex-wrap:wrap;gap:4px">${pricesHtml}</div></td>
+        <td><button class="action-btn" onclick="sendManualAlert('${o.pair}', ${o.spread.toFixed(3)}, '${o.minEx}', '${o.maxEx}', ${o.minP.toFixed(4)}, ${o.maxP.toFixed(4)})">📤 Alertar</button></td>
+      </tr>
+    `;
+  }).join('');
+
+  document.getElementById('tableContainer').innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>Par</th>
+          <th>Comprar em (menor)</th>
+          <th>Vender em (maior)</th>
+          <th>Spread</th>
+          <th>Lucro Est.</th>
+          <th>Todos Preços</th>
+          <th>Ação</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+function fmtPrice(p) {
+  if (p >= 1000) return p.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (p >= 1) return p.toFixed(4);
+  return p.toFixed(6);
+}
+
+// ============================================
+// TICKER
+// ============================================
+function updateTicker(priceData) {
+  const items = [];
+  for (const [pair, prices] of Object.entries(priceData)) {
+    for (const [ex, price] of Object.entries(prices)) {
+      const prev = state.priceData[pair]?.[ex];
+      const change = prev ? ((price - prev) / prev * 100) : 0;
+      const cls = change >= 0 ? 'up' : 'down';
+      const sign = change >= 0 ? '+' : '';
+      items.push(`
+        <div class="ticker-item">
+          <span class="exchange-tag ${exchangeInfo[ex]?.cls || ''}">${exchangeInfo[ex]?.name || ex}</span>
+          <span>${pair}</span>
+          <span class="ticker-price">$${fmtPrice(price)}</span>
+          <span class="ticker-change ${cls}">${sign}${change.toFixed(3)}%</span>
+        </div>
+      `);
+    }
+  }
+  const doubled = [...items, ...items].join('');
+  document.getElementById('tickerInner').innerHTML = doubled;
+}
+
+// ============================================
+// TELEGRAM
+// ============================================
+async function sendTelegram(message) {
+  const token = document.getElementById('botToken').value.trim();
+  const chatId = document.getElementById('chatId').value.trim();
+  if (!token || !chatId) return false;
+
+  try {
+    // Use backend API
+    const response = await fetch('/api/sendTelegram', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, chat_id: chatId, message })
+    });
+    const data = await response.json();
+    return data.ok || false;
+  } catch (error) {
+    console.error('Error sending telegram:', error);
+    return false;
+  }
+}
+
+async function testTelegram() {
+  const token = document.getElementById('botToken').value.trim();
+  const chatId = document.getElementById('chatId').value.trim();
+  if (!token || !chatId) { toast('Preencha o Token e o Chat ID.', 'warn'); return; }
+
+  toast('Enviando mensagem de teste...', 'success');
+  const ok = await sendTelegram(`🤖 <b>CryptoArb conectado!</b>\n\nSeu monitor de arbitragem está configurado e funcionando.\n\n📊 Exchanges: ${state.activeExchanges.map(e => exchangeInfo[e].name).join(', ')}\n💱 Pares: ${state.activePairs.join(', ')}`);
+
+  const dot = document.getElementById('tgDot');
+  const txt = document.getElementById('tgStatusText');
+  const s = document.getElementById('tgStatus');
+  s.style.display = 'flex';
+
+  if (ok) {
+    dot.style.background = 'var(--accent)';
+    txt.textContent = '✅ Bot conectado com sucesso!';
+    toast('Mensagem enviada ao Telegram!', 'success');
+  } else {
+    dot.style.background = 'var(--red)';
+    dot.style.animation = 'none';
+    txt.textContent = '❌ Erro: verifique o Token e Chat ID';
+    toast('Falha ao conectar ao Telegram.', 'error');
+  }
+}
+
+async function sendManualAlert(pair, spread, buyEx, sellEx, buyPrice, sellPrice) {
+  const capital = parseFloat(document.getElementById('capital').value) || 1000;
+  const profit = (spread / 100) * capital;
+  const msg = buildAlertMessage(pair, spread, buyEx, sellEx, buyPrice, sellPrice, profit);
+  const ok = await sendTelegram(msg);
+  if (ok) toast(`Alerta de ${pair} enviado!`, 'success');
+  else toast('Configure o Telegram para enviar alertas.', 'warn');
+  addAlertToLog(pair, spread, buyEx, sellEx, ok);
+}
+
+function buildAlertMessage(pair, spread, buyEx, sellEx, buyPrice, sellPrice, profit) {
+  const ex1 = exchangeInfo[buyEx]?.name || buyEx;
+  const ex2 = exchangeInfo[sellEx]?.name || sellEx;
+  return `🚀 <b>OPORTUNIDADE DE ARBITRAGEM</b>
+
+💱 <b>Par:</b> ${pair}
+📈 <b>Spread:</b> ${parseFloat(spread).toFixed(3)}%
+💵 <b>Lucro Estimado:</b> $${parseFloat(profit).toFixed(2)}
+
+📥 <b>Comprar em ${ex1}:</b> $${fmtPrice(buyPrice)}
+📤 <b>Vender em ${ex2}:</b> $${fmtPrice(sellPrice)}
+
+⚡ Oportunidade detectada às ${new Date().toLocaleTimeString('pt-BR')}
+⚠️ Verifique taxas antes de operar.`;
+}
+
+function addAlertToLog(pair, spread, buyEx, sellEx, sent) {
+  const now = new Date().toLocaleTimeString('pt-BR');
+  state.alerts.unshift({ pair, spread, buyEx, sellEx, sent, time: now });
+  if (state.alerts.length > 50) state.alerts.pop();
+  if (sent) { state.alertsSent++; document.getElementById('alertCount').textContent = `${state.alertsSent} alertas enviados`; }
+  renderAlerts();
+  document.getElementById('statAlerts').textContent = state.alertsSent;
+}
+
+function renderAlerts() {
+  if (!state.alerts.length) return;
+  document.getElementById('alertsLog').innerHTML = state.alerts.map(a => `
+    <div class="alert-item">
+      <span class="alert-time">${a.time}</span>
+      <span class="alert-icon">${a.sent ? '✅' : '⚠️'}</span>
+      <span class="alert-text">
+        <strong>${a.pair}</strong> — Spread 
+        <span class="alert-spread">${parseFloat(a.spread).toFixed(3)}%</span>
+        — Comprar ${exchangeInfo[a.buyEx]?.name || a.buyEx}, Vender ${exchangeInfo[a.sellEx]?.name || a.sellEx}
+      </span>
+      <span style="font-size:11px;color:var(--muted)">${a.sent ? 'Telegram ✓' : 'Sem Telegram'}</span>
+    </div>
+  `).join('');
+}
+
+function clearAlerts() {
+  state.alerts = [];
+  document.getElementById('alertsLog').innerHTML = `<div class="empty-state"><div class="big">🔔</div><p>Log limpo.</p></div>`;
+}
+
+// ============================================
+// MAIN FETCH LOOP
+// ============================================
+async function fetchOnce() {
+  document.getElementById('lastUpdate').textContent = 'Buscando preços...';
+  try {
+    const data = await fetchAllPrices();
+    updateTicker(data);
+    state.priceData = data;
+
+    const opps = calcArbitrage(data);
+    renderTable(opps);
+
+    // Triangular arbitrage
+    const triRoutes = calcTriangular(data);
+    renderTriangular(triRoutes);
+
+    // Auto-alert triangular opportunities
+    const minSpread = parseFloat(document.getElementById('minSpread').value) || 1.0;
+    const cooldown = parseInt(document.getElementById('cooldown').value) || 300000;
+    const now = Date.now();
+    const capital = parseFloat(document.getElementById('capital').value) || 1000;
+
+    for (const route of triRoutes) {
+      if (route.profitPct >= minSpread) {
+        const key = `tri_${route.label}`;
+        const last = state.lastAlertTime[key] || 0;
+        if (now - last > cooldown) {
+          state.lastAlertTime[key] = now;
+          await sendTriangularAlert(route.label, route.profitPct.toFixed(3), route.profit.toFixed(2), route.buyBEx, route.sellCEx);
+        }
+      }
+    }
+
+    for (const opp of opps) {
+      if (opp.spread >= minSpread) {
+        const key = `${opp.pair}_${opp.minEx}_${opp.maxEx}`;
+        const last = state.lastAlertTime[key] || 0;
+        if (now - last > cooldown) {
+          state.lastAlertTime[key] = now;
+          const profit = (opp.spread / 100) * capital;
+          const msg = buildAlertMessage(opp.pair, opp.spread, opp.minEx, opp.maxEx, opp.minP, opp.maxP, profit);
+          const ok = await sendTelegram(msg);
+          addAlertToLog(opp.pair, opp.spread, opp.minEx, opp.maxEx, ok);
+          if (ok) toast(`📬 Alerta: ${opp.pair} +${opp.spread.toFixed(2)}%`, 'success');
+        }
+      }
+    }
+
+    document.getElementById('lastUpdate').textContent = `Atualizado às ${new Date().toLocaleTimeString('pt-BR')}`;
+  } catch(e) {
+    document.getElementById('lastUpdate').textContent = 'Erro ao buscar preços';
+    console.error(e);
+  }
+}
+
+function toggleMonitor() {
+  if (state.running) {
+    clearInterval(state.intervalId);
+    state.running = false;
+    document.getElementById('startBtn').textContent = '▶ Iniciar Monitor';
+    document.getElementById('startBtn').style.background = 'var(--accent)';
+    document.getElementById('statusDot').className = 'dot inactive';
+    document.getElementById('statusText').textContent = 'Parado';
+    document.getElementById('runningText').style.display = 'none';
+  } else {
+    state.running = true;
+    document.getElementById('startBtn').textContent = '⏹ Parar Monitor';
+    document.getElementById('startBtn').style.background = 'var(--red)';
+    document.getElementById('statusDot').className = 'dot';
+    document.getElementById('statusText').textContent = 'Ao vivo';
+    document.getElementById('runningText').style.display = 'flex';
+
+    fetchOnce();
+    const ms = parseInt(document.getElementById('interval').value) || 30000;
+    state.intervalId = setInterval(fetchOnce, ms);
+    toast('Monitor iniciado!', 'success');
+  }
+}
+
+function sortTable() {
+  state.sortDesc = !state.sortDesc;
+}
+
+// ============================================
+// TOAST
+// ============================================
+function toast(msg, type = 'success') {
+  const c = document.getElementById('toastContainer');
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.innerHTML = `<span>${type === 'success' ? '✅' : type === 'warn' ? '⚠️' : '❌'}</span><span>${msg}</span>`;
+  c.appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity 0.3s'; setTimeout(() => el.remove(), 300); }, 4000);
+}
+
+// ============================================
+// INIT
+// ============================================
+initChips();
+</script>
+</body>
+</html>
