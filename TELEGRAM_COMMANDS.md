@@ -19,6 +19,8 @@ curl "https://api.telegram.org/bot123456789:ABCDEFGHijklmno/setWebhook?url=https
 
 ### 2. Use os Comandos no Telegram
 
+Depois de configurar o webhook, envie `/start` uma vez para o bot registrar os comandos no Telegram e exibir o menu de atalhos.
+
 Converse com seu bot:
 
 | Comando | O que faz |

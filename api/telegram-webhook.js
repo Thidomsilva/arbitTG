@@ -8,15 +8,15 @@ const activeMonitors = {};
 
 module.exports = async (req, res) => {
   try {
-    const { message, callback_query } = req.body;
+    const { message } = req.body;
 
     // Comando via mensagem
     if (message) {
       const chatId = message.chat.id;
       const text = message.text?.trim();
-      const userId = message.from?.id;
 
       if (text === '/start' || text === '/help') {
+        await ensureBotCommands();
         return sendMessage(chatId, `
 🤖 <b>CryptoArb Monitor</b>
 
@@ -31,7 +31,14 @@ module.exports = async (req, res) => {
 
 <b>Exchanges Suportados:</b>
 binance, mexc, mercadobitcoin, kraken, coinbase, okx, kucoin, bybit
-`);
+`, {
+          keyboard: [
+            [{ text: '/monitor' }, { text: '/status' }],
+            [{ text: '/config' }, { text: '/stop' }],
+          ],
+          resize_keyboard: true,
+          is_persistent: true,
+        });
       }
 
       if (text === '/monitor') {
@@ -131,7 +138,7 @@ Use /monitor para iniciar com essas configurações.
   }
 };
 
-async function sendMessage(chatId, text) {
+async function sendMessage(chatId, text, replyMarkup) {
   try {
     const response = await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
       method: 'POST',
@@ -139,12 +146,39 @@ async function sendMessage(chatId, text) {
       body: JSON.stringify({
         chat_id: chatId,
         text,
-        parse_mode: 'HTML'
+        parse_mode: 'HTML',
+        reply_markup: replyMarkup,
       })
     });
     return response.json();
   } catch (error) {
     console.error('Error sending message:', error);
+  }
+}
+
+async function ensureBotCommands() {
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${TOKEN}/setMyCommands`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        commands: [
+          { command: 'start', description: 'Iniciar e abrir menu' },
+          { command: 'monitor', description: 'Iniciar monitoramento' },
+          { command: 'stop', description: 'Parar monitoramento' },
+          { command: 'status', description: 'Ver status atual' },
+          { command: 'config', description: 'Configurar parametros' },
+          { command: 'help', description: 'Ajuda e comandos' },
+        ],
+      }),
+    });
+
+    const data = await response.json();
+    if (!data.ok) {
+      console.error('setMyCommands falhou:', data);
+    }
+  } catch (error) {
+    console.error('Erro ao registrar comandos:', error);
   }
 }
 
