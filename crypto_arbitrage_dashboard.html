@@ -1244,6 +1244,7 @@ async function sendTriangularAlert(label, pct, profit, buyEx, sellEx) {
     `💰 <b>Capital:</b> $${capital}\n\n` +
     `📥 Comprar em: <b>${ex1}</b>\n` +
     `📤 Vender em: <b>${ex2}</b>\n\n` +
+    `🖥️ Origem: Dashboard Web\n` +
     `⚡ ${ts} | Verifique fees antes de executar!`;
   const ok = await sendTelegram(msg);
   if (ok) toast(`🔺 Alerta triangular enviado!`, 'success');
@@ -1496,6 +1497,7 @@ function buildAlertMessage(pair, spread, buyEx, sellEx, buyPrice, sellPrice, pro
 📤 <b>Vender em ${ex2}:</b> $${fmtPrice(sellPrice)}
 
 ⚡ Oportunidade detectada às ${new Date().toLocaleTimeString('pt-BR')}
+🖥️ Origem: Dashboard Web
 ⚠️ Verifique taxas antes de operar.`;
 }
 

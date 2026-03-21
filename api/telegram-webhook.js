@@ -5,6 +5,7 @@ const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
 // Armazenar estado de monitoramentos ativos (em memória - para produção usar DB)
 const activeMonitors = {};
+const lastCommandByChat = {};
 
 module.exports = async (req, res) => {
   try {
@@ -43,6 +44,7 @@ async function processUpdate(body) {
 
     const chatId = message.chat.id;
     const text = (message.text || '').trim();
+    lastCommandByChat[chatId] = { command: text, at: new Date().toISOString() };
 
     if (text === '/start' || text === '/help') {
       await sendMessage(chatId, `
@@ -90,6 +92,8 @@ Monitorando:
 💵 Capital: $${activeMonitors[chatId].capital}
 
 Use /stop para parar ou /config para alterar.
+
+ℹ️ Este comando controla o monitor do bot (backend). Não para monitor aberto na aba web.
 `);
       return;
     }
@@ -101,7 +105,7 @@ Use /stop para parar ou /config para alterar.
       }
 
       activeMonitors[chatId].running = false;
-      await sendMessage(chatId, '⏹️ Monitor parado!');
+      await sendMessage(chatId, '⏹️ Monitor do bot parado!\n\nℹ️ Se ainda chegam alertas, provavelmente vêm da aba web aberta com monitor ativo.');
       return;
     }
 
@@ -124,6 +128,10 @@ Iniciado: ${monitor.startTime}
 💵 Capital: $${monitor.capital}
 
 <code>Chat ID: ${chatId}</code>
+Último comando: <code>${lastCommandByChat[chatId]?.command || '-'}</code>
+Em: <code>${lastCommandByChat[chatId]?.at || '-'}</code>
+
+Origem deste status: <b>Bot (backend)</b>
 `);
       return;
     }
