@@ -6,6 +6,7 @@ const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 // Armazenar estado de monitoramentos ativos (em memória - para produção usar DB)
 const activeMonitors = {};
 const lastCommandByChat = {};
+let commandsRegistered = false;
 
 module.exports = async (req, res) => {
   try {
@@ -15,10 +16,14 @@ module.exports = async (req, res) => {
 
     const body = normalizeBody(req.body);
 
-    // Responde imediatamente para o Telegram não reentregar update por timeout.
-    res.status(200).json({ ok: true });
+    if (!commandsRegistered && TOKEN) {
+      commandsRegistered = true;
+      await ensureBotCommands();
+    }
 
-    void processUpdate(body);
+    // Processa o update dentro da requisicao para funcionar de forma confiavel em serverless.
+    await processUpdate(body);
+    res.status(200).json({ ok: true });
   } catch (error) {
     console.error('Webhook error:', error);
     res.status(500).json({ ok: false, error: error.message });
@@ -43,8 +48,9 @@ async function processUpdate(body) {
     if (!message) return;
 
     const chatId = message.chat.id;
-    const text = (message.text || '').trim();
-    lastCommandByChat[chatId] = { command: text, at: new Date().toISOString() };
+    const rawText = (message.text || '').trim();
+    const text = normalizeTelegramCommand(rawText);
+    lastCommandByChat[chatId] = { command: rawText, at: new Date().toISOString() };
 
     if (text === '/start' || text === '/help') {
       await sendMessage(chatId, `
@@ -174,6 +180,16 @@ Use /monitor para iniciar com essas configurações.
   } catch (error) {
     console.error('processUpdate error:', error);
   }
+}
+
+function normalizeTelegramCommand(text) {
+  if (!text || text[0] !== '/') return text;
+
+  const firstToken = text.split(' ')[0];
+  const command = firstToken.split('@')[0];
+  const args = text.slice(firstToken.length).trim();
+
+  return args ? `${command} ${args}` : command;
 }
 
 async function sendMessage(chatId, text, replyMarkup) {

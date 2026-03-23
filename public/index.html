@@ -860,6 +860,36 @@ const defillamaTokenMap = {
 // Cache do DefiLlama para não bater a API toda vez
 let defillamaCache = {};
 let defillamaCacheTime = 0;
+let usdtBrlCache = { value: null, at: 0 };
+
+async function fetchUsdtBrlRate() {
+  const now = Date.now();
+  if (usdtBrlCache.value && now - usdtBrlCache.at < 15000) {
+    return usdtBrlCache.value;
+  }
+
+  try {
+    const r = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=USDTBRL');
+    const d = await r.json();
+    const v = parseFloat(d.price);
+    if (v > 0) {
+      usdtBrlCache = { value: v, at: now };
+      return v;
+    }
+  } catch {}
+
+  try {
+    const fx = await fetch('https://api.frankfurter.app/latest?from=USD&to=BRL');
+    const fxd = await fx.json();
+    const v = parseFloat(fxd.rates?.BRL);
+    if (v > 0) {
+      usdtBrlCache = { value: v, at: now };
+      return v;
+    }
+  } catch {}
+
+  return usdtBrlCache.value || 5.7;
+}
 
 async function fetchDefillamaPrices() {
   const now = Date.now();
@@ -879,6 +909,9 @@ async function fetchDefillamaPrices() {
 async function fetchDefillamaPrice(symbol) {
   try {
     const [base] = symbol.split('/');
+    if (base === 'USDT' && symbol.endsWith('/BRL')) {
+      return await fetchUsdtBrlRate();
+    }
     const tokenId = defillamaTokenMap[base];
     if (!tokenId) return null;
     const prices = await fetchDefillamaPrices();
@@ -1013,14 +1046,10 @@ async function fetchMercadoBitcoinPrice(symbol) {
     const priceBRL = parseFloat(d.ticker?.last);
     if (!priceBRL) return null;
     if (!cfg.brl) return priceBRL;
-    // Converte BRL → USD
-    let usdRate = 1/5.7;
-    try {
-      const fx = await fetch('https://api.frankfurter.app/latest?from=BRL&to=USD');
-      const fxd = await fx.json();
-      usdRate = fxd.rates?.USD || usdRate;
-    } catch {}
-    return priceBRL * usdRate;
+    // Mercado Bitcoin e BRL-only: para pares /USDT, converter BRL -> USDT.
+    const usdtBrl = await fetchUsdtBrlRate();
+    if (!usdtBrl || usdtBrl <= 0) return null;
+    return priceBRL / usdtBrl;
   } catch { return null; }
 }
 
@@ -1368,7 +1397,7 @@ function renderTable(opps) {
 
 function fmtPrice(p) {
   if (p >= 1000) return p.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  if (p >= 1) return p.toFixed(4);
+  if (p >= 1) return p.toFixed(6);
   return p.toFixed(6);
 }
 

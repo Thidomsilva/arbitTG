@@ -21,6 +21,7 @@ module.exports = async (req, res) => {
     }
 
     let price;
+    const usdtBrl = await fetchUsdtBrl();
 
     // Binance
     if (exchange === 'binance') {
@@ -55,6 +56,21 @@ module.exports = async (req, res) => {
       const data = await response.json();
       price = data.result.list[0].lastPrice;
     }
+    // Mercado Bitcoin (precos em BRL convertidos quando necessario)
+    else if (exchange === 'mercadobitcoin') {
+      const [base, quote] = splitPair(pair);
+      const response = await fetch(`https://www.mercadobitcoin.net/api/${base}/ticker/`);
+      const data = await response.json();
+      const priceBrl = parseFloat(data?.ticker?.last);
+
+      if (!priceBrl || priceBrl <= 0) {
+        return res.status(502).json({ error: 'No price data from mercadobitcoin' });
+      }
+
+      if (quote === 'BRL') price = priceBrl;
+      else if (quote === 'USDT') price = priceBrl / usdtBrl;
+      else return res.status(400).json({ error: `Unsupported quote for mercadobitcoin: ${quote}` });
+    }
     else {
       return res.status(400).json({ error: 'Unsupported exchange' });
     }
@@ -65,3 +81,31 @@ module.exports = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+function splitPair(pair) {
+  if (pair.includes('/')) {
+    const [base, quote] = pair.split('/');
+    return [base, quote];
+  }
+
+  // Fallback para simbolos sem separador (ex: BTCUSDT)
+  const quotes = ['USDT', 'USD', 'BRL'];
+  for (const q of quotes) {
+    if (pair.endsWith(q) && pair.length > q.length) {
+      return [pair.slice(0, -q.length), q];
+    }
+  }
+
+  return [pair, 'USDT'];
+}
+
+async function fetchUsdtBrl() {
+  try {
+    const response = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=USDTBRL');
+    const data = await response.json();
+    const value = parseFloat(data.price);
+    if (value > 0) return value;
+  } catch {}
+
+  return 5.7;
+}
