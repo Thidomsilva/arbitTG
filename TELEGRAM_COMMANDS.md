@@ -36,11 +36,19 @@ Converse com seu bot:
 
 | Comando | O que faz |
 |---------|-----------|
-| `/start` | Ver todos os comandos |
+| `/start` | Ver todos os comandos e abrir botões inline |
 | `/monitor` | Iniciar monitoramento com config padrão |
 | `/stop` | Parar monitoramento |
 | `/status` | Ver status atual |
-| `/config` | Alterar configurações |
+| `/config` | Alterar configurações (modo, corretoras, moedas, etc.) |
+
+Os botões inline agora funcionam para:
+- Iniciar / parar monitor
+- Ver status
+- Abrir painel de configuração
+- Alternar modo (`cross`, `triangular`, `both`)
+- Selecionar corretoras
+- Selecionar moedas monitoradas
 
 ## Exemplos de Uso
 
@@ -87,13 +95,33 @@ Bot: ⏹️ Monitor parado!
 ```bash
 /config min_spread=VALOR        # Spread mínimo em % (padrão: 1.5)
 /config capital=VALOR           # Capital em USD (padrão: 1000)
-/config pairs=PAR1,PAR2,PAR3   # Pares (padrão: BTC/USDT,ETH/USDT,SOL/USDT)
 /config exchanges=EX1,EX2,EX3  # Exchanges (padrão: binance,mexc,mercadobitcoin)
+/config mode=cross|triangular|both
+/config coins=BTC,ETH,SOL,XRP  # Moedas base monitoradas
+/config pairs=BTC/USDT,ETH/USDT # Compatível: converte para moedas base
 ```
 
 ### Exemplo Completo:
 ```
-/config min_spread=2.5 capital=10000 pairs=BTC/USDT,ETH/USDT exchanges=binance,mexc,kraken
+/config mode=both min_spread=2.5 capital=10000 coins=BTC,ETH,SOL exchanges=binance,mexc,kraken
+```
+
+## Modos de Estratégia
+
+- `cross`: arbitragem entre corretoras (comprar barato em uma e vender caro em outra)
+- `triangular`: arbitragem triangular (`BRL -> USDT -> COIN -> BRL`)
+- `both`: executa as duas estratégias
+
+## Seleção de Corretoras e Moedas
+
+Você pode ajustar por comando ou pelos botões inline do `/config`.
+
+Exemplos:
+
+```bash
+/config exchanges=binance,mexc,bybit,mercadobitcoin
+/config coins=BTC,ETH,SOL,XRP,DOGE
+/config mode=triangular
 ```
 
 ## Fluxo de Funcionamento
