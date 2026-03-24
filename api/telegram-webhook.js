@@ -1,7 +1,8 @@
 // Webhook do Telegram - Processa mensagens e comandos do bot
 // Configure em: https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://seu-url.vercel.app/api/telegram-webhook
 
-const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const EMBEDDED_BOT_TOKEN = '8643686608:AAGaAzT1mtcuNhBCDPq0JZomu6jIWM9IWgw';
+const TOKEN = process.env.TELEGRAM_BOT_TOKEN || EMBEDDED_BOT_TOKEN;
 
 // Armazenar estado de monitoramentos ativos (em memória - para produção usar DB)
 const activeMonitors = {};
