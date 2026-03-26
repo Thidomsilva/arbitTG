@@ -20,7 +20,7 @@ const SUPPORTED_EXCHANGES = [
   'kraken',
 ];
 
-const SUPPORTED_COINS = ['BTC', 'ETH', 'SOL', 'XRP', 'DOGE', 'LTC', 'LINK', 'ADA', 'AVAX', 'DOT', 'SHIB', 'POL', 'MATIC', 'DAI', 'BRZ'];
+const SUPPORTED_COINS = ['XRP', 'POL', 'MATIC', 'SOL', 'ETH', 'DAI', 'DOGE', 'LTC', 'LINK', 'AVAX', 'ADA', 'SHIB', 'DOT', 'BRZ'];
 
 const EXCHANGE_LABELS = {
   binance: 'Binance',
@@ -216,7 +216,7 @@ function defaultMonitorConfig() {
     running: false,
     startTime: '-',
     mode: 'both',
-    coins: ['BTC', 'ETH', 'SOL', 'XRP', 'DAI'],
+    coins: ['XRP', 'SOL', 'DOGE', 'LTC', 'LINK', 'DAI', 'BRZ'],
     exchanges: ['binance', 'mexc', 'mercadobitcoin', 'bybit'],
     minSpread: 1.5,
     capital: 1000,
