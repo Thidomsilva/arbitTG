@@ -864,7 +864,7 @@ let usdtBrlCache = { value: null, at: 0 };
 
 async function fetchUsdtBrlRate() {
   const now = Date.now();
-  if (usdtBrlCache.value && now - usdtBrlCache.at < 15000) {
+  if (usdtBrlCache.value && now - usdtBrlCache.at < 8000) {
     return usdtBrlCache.value;
   }
 
@@ -893,7 +893,7 @@ async function fetchUsdtBrlRate() {
 
 async function fetchDefillamaPrices() {
   const now = Date.now();
-  if (now - defillamaCacheTime < 20000 && Object.keys(defillamaCache).length > 0) {
+  if (now - defillamaCacheTime < 8000 && Object.keys(defillamaCache).length > 0) {
     return defillamaCache; // cache de 20s
   }
   try {
@@ -917,14 +917,9 @@ async function fetchDefillamaPrice(symbol) {
     const prices = await fetchDefillamaPrices();
     const price = prices[tokenId]?.price;
     if (!price) return null;
-    // Para pares BRL, converter USD → BRL
+    // Para pares BRL, converter USD → BRL usando a taxa já cacheada
     if (symbol.endsWith('/BRL')) {
-      let brlRate = 5.7;
-      try {
-        const fx = await fetch('https://api.frankfurter.app/latest?from=USD&to=BRL');
-        const fxd = await fx.json();
-        brlRate = fxd.rates?.BRL || brlRate;
-      } catch {}
+      const brlRate = await fetchUsdtBrlRate();
       return price * brlRate;
     }
     return price;
@@ -1110,22 +1105,13 @@ async function fetchAllPrices() {
 
     const promises = state.activeExchanges.map(async ex => {
       try {
-        // Checar cache primeiro
-        const cached = getCachedPrice(ex, pair);
-        if (cached) {
-          results[pair][ex] = cached;
-          return;
-        }
-        
-        // Se não está em cache, buscar com timeout de 4 segundos
+        // Buscar sempre fresco — o cache do DefiLlama (batch) já evita spam na API deles
         const price = await Promise.race([
           fetchers[ex]?.(),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 4000))
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000))
         ]);
-        
         if (price && !isNaN(price) && price > 0) {
           results[pair][ex] = price;
-          setCachedPrice(ex, pair, price);
         }
       } catch {}
     });
@@ -1237,18 +1223,23 @@ function calcTriangular(priceData) {
     const legTokentoBRL = bestLeg(token, 'BRL');
     if (!legUSDTtoToken || !legTokentoBRL) continue;
 
-    const finalAmount = capital * legBRLtoUSDT.netRate * legUSDTtoToken.netRate * legTokentoBRL.netRate;
-    const profit = finalAmount - capital;
-    const profitPct = (profit / capital) * 100;
+    const amtUSDT     = capital * legBRLtoUSDT.netRate;
+    const amtToken    = amtUSDT * legUSDTtoToken.netRate;
+    const amtBRLfinal = amtToken * legTokentoBRL.netRate;
+    const profit      = amtBRLfinal - capital;
+    const profitPct   = (profit / capital) * 100;
 
     results.push({
       label: `BRL→USDT→${token}→BRL`,
       a: 'BRL', b: 'USDT', c: token,
       profitPct, profit, capital,
-      buyBEx: legBRLtoUSDT.ex,
+      buyBEx:  legBRLtoUSDT.ex,
+      midEx:   legUSDTtoToken.ex,
       sellCEx: legTokentoBRL.ex,
       priceBmin: legBRLtoUSDT.refPrice,
+      priceMid:  legUSDTtoToken.refPrice,
       priceCmax: legTokentoBRL.refPrice,
+      amtUSDT, amtToken, amtBRLfinal,
       viable: profitPct > 0,
     });
   }
@@ -1262,27 +1253,41 @@ function renderTriangular(routes) {
   const minPct = parseFloat(document.getElementById('minSpread').value) || 1.0;
   const viable = routes.filter(r => r.profitPct >= minPct);
 
+  const fmtBRL  = v => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtUSDT = v => v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtTok  = v => v < 0.001 ? v.toFixed(8) : v < 10 ? v.toFixed(4) : v.toFixed(2);
+
   const rows = routes.slice(0, 20).map(r => {
-    const cls    = r.profitPct >= minPct ? 'spread-high' : r.profitPct > 0 ? 'spread-med' : 'spread-low';
-    const rowCls = r.profitPct >= minPct ? 'arb-row-high' : '';
-    const arrow  = r.profitPct >= minPct ? '🚨' : r.profitPct > 0 ? '✅' : '❌';
-    const exBuy  = exchangeInfo[r.buyBEx]?.name  || r.buyBEx  || '?';
-    const exSell = exchangeInfo[r.sellCEx]?.name || r.sellCEx || '?';
+    const cls        = r.profitPct >= minPct ? 'spread-high' : r.profitPct > 0 ? 'spread-med' : 'spread-low';
+    const rowCls     = r.profitPct >= minPct ? 'arb-row-high' : '';
+    const arrow      = r.profitPct >= minPct ? '🚨' : r.profitPct > 0 ? '✅' : '❌';
+    const exBuy      = exchangeInfo[r.buyBEx]?.name  || r.buyBEx  || '?';
+    const exMid      = exchangeInfo[r.midEx]?.name   || r.midEx   || '?';
+    const exSell     = exchangeInfo[r.sellCEx]?.name || r.sellCEx || '?';
+    const finalColor = r.amtBRLfinal >= r.capital ? 'color:var(--accent)' : 'color:var(--red)';
 
     return `
       <tr class="${rowCls}">
-        <td style="font-size:12px">${arrow} <strong>${r.label}</strong></td>
-        <td>
-          <span class="exchange-tag ${exchangeInfo[r.buyBEx]?.cls||''}">${exBuy}</span>
-          <span style="color:var(--muted);margin:0 4px;font-size:11px">$${fmtPrice(r.priceBmin)}</span>
+        <td style="font-size:12px;line-height:1.9">
+          ${arrow} <strong>${r.label}</strong><br>
+          <span style="font-size:11px;font-family:var(--mono)">
+            <span style="color:var(--muted)">R$</span><span style="color:var(--text)">${fmtBRL(r.capital)}</span>
+            <span style="color:var(--muted)"> → $</span><span style="color:var(--text)">${fmtUSDT(r.amtUSDT)} USDT</span>
+            <span style="color:var(--muted)"> → </span><span style="color:var(--text)">${fmtTok(r.amtToken)} ${r.c}</span>
+            <span style="color:var(--muted)"> → </span><span style="${finalColor};font-weight:700">R$${fmtBRL(r.amtBRLfinal)}</span>
+          </span>
         </td>
-        <td>
+        <td style="font-size:11px;line-height:2">
+          <span class="exchange-tag ${exchangeInfo[r.buyBEx]?.cls||''}">${exBuy}</span>
+          <span style="color:var(--muted);font-size:10px"> BRL→USDT</span><br>
+          <span class="exchange-tag ${exchangeInfo[r.midEx]?.cls||''}">${exMid}</span>
+          <span style="color:var(--muted);font-size:10px"> USDT→${r.c}</span><br>
           <span class="exchange-tag ${exchangeInfo[r.sellCEx]?.cls||''}">${exSell}</span>
-          <span style="color:var(--muted);margin:0 4px;font-size:11px">$${fmtPrice(r.priceCmax)}</span>
+          <span style="color:var(--muted);font-size:10px"> ${r.c}→BRL</span>
         </td>
         <td><span class="spread-badge ${cls}">${r.profitPct >= 0 ? '+' : ''}${r.profitPct.toFixed(3)}%</span></td>
         <td class="${r.profit >= 0 ? 'profit-est' : ''}" style="${r.profit < 0 ? 'color:var(--red)' : ''}">
-          ${r.profit >= 0 ? '+' : ''}$${r.profit.toFixed(2)}
+          ${r.profit >= 0 ? '+' : ''}R$${fmtBRL(r.profit)}
         </td>
         <td>
           <button class="action-btn" onclick="sendTriangularAlert('${r.label}',${r.profitPct.toFixed(3)},${r.profit.toFixed(2)},'${r.buyBEx}','${r.sellCEx}')">📤</button>
@@ -1300,11 +1305,10 @@ function renderTriangular(routes) {
     <table>
       <thead>
         <tr>
-          <th>Rota Triangular</th>
-          <th>Comprar B em</th>
-          <th>Vender C em</th>
+          <th>Rota + Fluxo de Capital</th>
+          <th>Exchanges (perna a perna)</th>
           <th>Lucro %</th>
-          <th>Lucro $</th>
+          <th>Lucro R$</th>
           <th>Alerta</th>
         </tr>
       </thead>
@@ -1597,6 +1601,7 @@ async function fetchOnce() {
   document.getElementById('lastUpdate').textContent = 'Buscando preços...';
   try {
     const data = await fetchAllPrices();
+    if (!state.running) return;  // usuario parou enquanto buscava
     updateTicker(data);
     state.priceData = data;
 
