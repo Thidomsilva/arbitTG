@@ -20,7 +20,7 @@ const SUPPORTED_EXCHANGES = [
   'kraken',
 ];
 
-const SUPPORTED_COINS = ['BTC', 'ETH', 'SOL', 'XRP', 'DOGE', 'LTC', 'LINK', 'ADA', 'AVAX', 'DOT'];
+const SUPPORTED_COINS = ['BTC', 'ETH', 'SOL', 'XRP', 'DOGE', 'LTC', 'LINK', 'ADA', 'AVAX', 'DOT', 'SHIB', 'POL', 'MATIC', 'DAI', 'BRZ'];
 
 const EXCHANGE_LABELS = {
   binance: 'Binance',
@@ -216,11 +216,21 @@ function defaultMonitorConfig() {
     running: false,
     startTime: '-',
     mode: 'both',
-    coins: ['BTC', 'ETH', 'SOL', 'XRP'],
+    coins: ['BTC', 'ETH', 'SOL', 'XRP', 'DAI'],
     exchanges: ['binance', 'mexc', 'mercadobitcoin', 'bybit'],
     minSpread: 1.5,
     capital: 1000,
   };
+}
+
+function buildCoinRows(monitor, perRow = 4) {
+  const rows = [];
+  for (let i = 0; i < SUPPORTED_COINS.length; i += perRow) {
+    rows.push(
+      SUPPORTED_COINS.slice(i, i + perRow).map(coin => mkCoinBtn(monitor, coin))
+    );
+  }
+  return rows;
 }
 
 function coinsToPairs(coins) {
@@ -408,18 +418,7 @@ Use os botões para ajustar.`;
         mkExchangeBtn(monitor, 'okx'),
         mkExchangeBtn(monitor, 'kucoin'),
       ],
-      [
-        mkCoinBtn(monitor, 'BTC'),
-        mkCoinBtn(monitor, 'ETH'),
-        mkCoinBtn(monitor, 'SOL'),
-        mkCoinBtn(monitor, 'XRP'),
-      ],
-      [
-        mkCoinBtn(monitor, 'DOGE'),
-        mkCoinBtn(monitor, 'LTC'),
-        mkCoinBtn(monitor, 'LINK'),
-        mkCoinBtn(monitor, 'ADA'),
-      ],
+      ...buildCoinRows(monitor),
       [
         { text: '▶️ Iniciar', callback_data: 'act:monitor' },
         { text: '📊 Status', callback_data: 'act:status' },
