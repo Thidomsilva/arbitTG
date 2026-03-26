@@ -763,6 +763,7 @@ const state = {
     'POL/USDT','MATIC/USDT',
     'SOL/USDT','SOL/BRL',
     'ETH/USDT','ETH/BRL',
+    'DAI/USDT','DAI/BRL',
     'DOGE/USDT','DOGE/BRL',
     'LTC/USDT','LTC/BRL',
     'LINK/USDT','LINK/BRL',
@@ -773,7 +774,7 @@ const state = {
     'USDT/BRL',
     'BRZ/USDT','BRZ/BRL',
   ],
-  activePairs: ['XRP/USDT','XRP/BRL','SOL/USDT','DOGE/USDT','LTC/USDT','LINK/USDT','USDT/BRL','BRZ/USDT','BRZ/BRL'],
+  activePairs: ['XRP/USDT','XRP/BRL','SOL/USDT','DOGE/USDT','LTC/USDT','LINK/USDT','DAI/USDT','USDT/BRL','BRZ/USDT','BRZ/BRL'],
 };
 
 // ============================================
@@ -853,6 +854,7 @@ const defillamaTokenMap = {
   'DOT':  'coingecko:polkadot',
   'POL':  'coingecko:polygon-ecosystem-token',
   'MATIC':'coingecko:matic-network',
+  'DAI':  'coingecko:dai',
   'USDT': 'coingecko:tether',
   'BRZ':  'coingecko:brazilian-digital-token',
 };
@@ -1030,6 +1032,8 @@ async function fetchMercadoBitcoinPrice(symbol) {
       'POL/USDT':   { coin: 'POL',   brl: true },
       'POL/BRL':    { coin: 'POL',   brl: false },
       'MATIC/USDT': { coin: 'MATIC', brl: true },
+      'DAI/USDT':   { coin: 'DAI',   brl: true },
+      'DAI/BRL':    { coin: 'DAI',   brl: false },
       'USDT/BRL':   { coin: 'USDT',  brl: false },
       'BRZ/USDT':   { coin: 'BRZ',   brl: true  },
       'BRZ/BRL':    { coin: 'BRZ',   brl: false },
@@ -1290,7 +1294,7 @@ function renderTriangular(routes) {
           ${r.profit >= 0 ? '+' : ''}R$${fmtBRL(r.profit)}
         </td>
         <td>
-          <button class="action-btn" onclick="sendTriangularAlert('${r.label}',${r.profitPct.toFixed(3)},${r.profit.toFixed(2)},'${r.buyBEx}','${r.sellCEx}')">📤</button>
+          <button class="action-btn" onclick="sendTriangularAlert('${r.label}',${r.profitPct.toFixed(3)},${r.profit.toFixed(2)},'${r.buyBEx}','${r.midEx}','${r.sellCEx}',${r.capital},${r.amtUSDT},${r.amtToken},${r.amtBRLfinal},'${r.c}')">📤</button>
         </td>
       </tr>
     `;
@@ -1317,18 +1321,32 @@ function renderTriangular(routes) {
   `;
 }
 
-async function sendTriangularAlert(label, pct, profit, buyEx, sellEx) {
-  const capital = parseFloat(document.getElementById('capital').value) || 1000;
+async function sendTriangularAlert(label, pct, profit, buyEx, midEx, sellEx, capital, amtUSDT, amtToken, amtBRLfinal, token) {
+  const cap = Number.isFinite(Number(capital)) ? Number(capital) : (parseFloat(document.getElementById('capital').value) || 1000);
+  const usdt = Number.isFinite(Number(amtUSDT)) ? Number(amtUSDT) : 0;
+  const tok = Number.isFinite(Number(amtToken)) ? Number(amtToken) : 0;
+  const finalBrl = Number.isFinite(Number(amtBRLfinal)) ? Number(amtBRLfinal) : 0;
+  const tk = token || (label.split('→')[2] || 'TOKEN');
+  const fmtBRL = v => Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtUSDT = v => Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtTok = v => {
+    const n = Number(v || 0);
+    if (n < 0.001) return n.toFixed(8);
+    if (n < 10) return n.toFixed(4);
+    return n.toFixed(2);
+  };
   const ts = new Date().toLocaleTimeString('pt-BR');
   const ex1 = exchangeInfo[buyEx]?.name || buyEx;
+  const exMid = exchangeInfo[midEx]?.name || midEx;
   const ex2 = exchangeInfo[sellEx]?.name || sellEx;
   const emoji = pct >= 2 ? '🚨' : '🔺';
   const msg = `${emoji} <b>ARBITRAGEM TRIANGULAR</b>\n\n` +
     `🔄 <b>Rota:</b> ${label}\n` +
-    `📈 <b>Lucro:</b> +${pct}% (+$${profit})\n` +
-    `💰 <b>Capital:</b> $${capital}\n\n` +
-    `📥 Comprar em: <b>${ex1}</b>\n` +
-    `📤 Vender em: <b>${ex2}</b>\n\n` +
+    `📈 <b>Lucro:</b> +${pct}% (+R$${fmtBRL(profit)})\n` +
+    `💰 <b>Fluxo:</b> R$${fmtBRL(cap)} → $${fmtUSDT(usdt)} USDT → ${fmtTok(tok)} ${tk} → R$${fmtBRL(finalBrl)}\n\n` +
+    `1) BRL→USDT em <b>${ex1}</b>\n` +
+    `2) USDT→${tk} em <b>${exMid}</b>\n` +
+    `3) ${tk}→BRL em <b>${ex2}</b>\n\n` +
     `⚡ ${ts} | Verifique fees antes de executar!`;
   const ok = await sendTelegram(msg);
   if (ok) toast(`🔺 Alerta triangular enviado!`, 'success');
@@ -1628,7 +1646,19 @@ async function fetchOnce() {
         const last = state.lastAlertTime[key] || 0;
         if (now - last > cooldown) {
           state.lastAlertTime[key] = now;
-          await sendTriangularAlert(route.label, route.profitPct.toFixed(3), route.profit.toFixed(2), route.buyBEx, route.sellCEx);
+          await sendTriangularAlert(
+            route.label,
+            route.profitPct.toFixed(3),
+            route.profit.toFixed(2),
+            route.buyBEx,
+            route.midEx,
+            route.sellCEx,
+            route.capital,
+            route.amtUSDT,
+            route.amtToken,
+            route.amtBRLfinal,
+            route.c
+          );
         }
       }
     }
