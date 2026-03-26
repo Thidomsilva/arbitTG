@@ -13,7 +13,7 @@
   "crons": [
     {
       "path": "/api/monitor-prices",
-      "schedule": "*/1 * * * *"
+      "schedule": "0 * * * *"
     }
   ]
 }

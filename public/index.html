@@ -1598,10 +1598,10 @@ function clearAlerts() {
 // MAIN FETCH LOOP
 // ============================================
 async function fetchOnce() {
+  const wasRunning = state.running;
   document.getElementById('lastUpdate').textContent = 'Buscando preços...';
   try {
     const data = await fetchAllPrices();
-    if (!state.running) return;  // usuario parou enquanto buscava
     updateTicker(data);
     state.priceData = data;
 
@@ -1613,6 +1613,10 @@ async function fetchOnce() {
     renderTriangular(triRoutes);
 
     // Auto-alert triangular opportunities
+    if (!wasRunning) {
+      document.getElementById('lastUpdate').textContent = `Atualizado às ${new Date().toLocaleTimeString('pt-BR')}`;
+      return;
+    }
     const minSpread = parseFloat(document.getElementById('minSpread').value) || 1.0;
     const cooldown = parseInt(document.getElementById('cooldown').value) || 300000;
     const now = Date.now();
