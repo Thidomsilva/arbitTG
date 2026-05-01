@@ -1072,19 +1072,23 @@ function calcArbitrage(priceData) {
     }
 
     const spread = ((maxP - minP) / minP) * 100;
+    const buyFee = EXCHANGE_FEES[minEx] ?? 0.002;
+    const sellFee = EXCHANGE_FEES[maxEx] ?? 0.002;
+    const effectiveBuyPrice = minP * (1 + buyFee);
+    const effectiveSellPrice = maxP * (1 - sellFee);
+    const netSpread = ((effectiveSellPrice - effectiveBuyPrice) / effectiveBuyPrice) * 100;
     const capital = parseFloat(document.getElementById('capital').value) || 1000;
-    // Descontar 0,20% na compra e 0,20% na venda
-    const afterFees = capital * (1 - 0.002) * (maxP / minP) * (1 - 0.002);
+    const afterFees = capital * (effectiveSellPrice / effectiveBuyPrice);
     const profit = afterFees - capital;
     const profitPct = (profit / capital) * 100;
 
     opps.push({
-      pair, spread, profitPct, minEx, maxEx, minP, maxP,
+      pair, spread, netSpread, profitPct, minEx, maxEx, minP, maxP,
       profit, allPrices: exList,
     });
   }
 
-  return opps.sort((a, b) => b.spread - a.spread);
+  return opps.sort((a, b) => b.profitPct - a.profitPct);
 }
 
 // ============================================
@@ -1240,12 +1244,12 @@ async function sendTriangularAlert(label, pct, profit, buyEx, sellEx) {
   const emoji = pct >= 2 ? '🚨' : '🔺';
   const msg = `${emoji} <b>ARBITRAGEM TRIANGULAR</b>\n\n` +
     `🔄 <b>Rota:</b> ${label}\n` +
-    `📈 <b>Lucro:</b> +${pct}% (+$${profit})\n` +
+    `📈 <b>Lucro Líquido:</b> +${pct}% (+$${profit})\n` +
     `💰 <b>Capital:</b> $${capital}\n\n` +
     `📥 Comprar em: <b>${ex1}</b>\n` +
     `📤 Vender em: <b>${ex2}</b>\n\n` +
     `🖥️ Origem: Dashboard Web\n` +
-    `⚡ ${ts} | Verifique fees antes de executar!`;
+    `⚡ ${ts} | Taxas aplicadas em cada perna.`;
   const ok = await sendTelegram(msg);
   if (ok) toast(`🔺 Alerta triangular enviado!`, 'success');
   else toast('Configure o Telegram primeiro.', 'warn');
@@ -1292,7 +1296,7 @@ function renderTable(opps) {
           <span style="font-size:10px;color:var(--muted);display:block">após fees</span>
         </td>
         <td><div style="display:flex;flex-wrap:wrap;gap:4px">${pricesHtml}</div></td>
-        <td><button class="action-btn" onclick="sendManualAlert('${o.pair}', ${o.spread.toFixed(3)}, '${o.minEx}', '${o.maxEx}', ${o.minP.toFixed(4)}, ${o.maxP.toFixed(4)})">📤 Alertar</button></td>
+        <td><button class="action-btn" onclick="sendManualAlert('${o.pair}', ${o.spread.toFixed(3)}, ${o.profitPct.toFixed(3)}, ${o.profit.toFixed(2)}, '${o.minEx}', '${o.maxEx}', ${o.minP.toFixed(4)}, ${o.maxP.toFixed(4)})">📤 Alertar</button></td>
       </tr>
     `;
   }).join('');
@@ -1474,24 +1478,23 @@ async function testTelegram() {
   }
 }
 
-async function sendManualAlert(pair, spread, buyEx, sellEx, buyPrice, sellPrice) {
-  const capital = parseFloat(document.getElementById('capital').value) || 1000;
-  const profit = (spread / 100) * capital;
-  const msg = buildAlertMessage(pair, spread, buyEx, sellEx, buyPrice, sellPrice, profit);
+async function sendManualAlert(pair, spread, netSpread, profit, buyEx, sellEx, buyPrice, sellPrice) {
+  const msg = buildAlertMessage(pair, spread, netSpread, buyEx, sellEx, buyPrice, sellPrice, profit);
   const ok = await sendTelegram(msg);
   if (ok) toast(`Alerta de ${pair} enviado!`, 'success');
   else toast('Configure o Telegram para enviar alertas.', 'warn');
-  addAlertToLog(pair, spread, buyEx, sellEx, ok);
+  addAlertToLog(pair, netSpread, buyEx, sellEx, ok);
 }
 
-function buildAlertMessage(pair, spread, buyEx, sellEx, buyPrice, sellPrice, profit) {
+function buildAlertMessage(pair, spread, netSpread, buyEx, sellEx, buyPrice, sellPrice, profit) {
   const ex1 = exchangeInfo[buyEx]?.name || buyEx;
   const ex2 = exchangeInfo[sellEx]?.name || sellEx;
   return `🚀 <b>OPORTUNIDADE DE ARBITRAGEM</b>
 
 💱 <b>Par:</b> ${pair}
-📈 <b>Spread:</b> ${parseFloat(spread).toFixed(3)}%
-💵 <b>Lucro Estimado:</b> $${parseFloat(profit).toFixed(2)}
+📈 <b>Spread Bruto:</b> ${parseFloat(spread).toFixed(3)}%
+📉 <b>Spread Líquido (após taxas):</b> ${parseFloat(netSpread).toFixed(3)}%
+💵 <b>Lucro Líquido Estimado:</b> $${parseFloat(profit).toFixed(2)}
 
 📥 <b>Comprar em ${ex1}:</b> $${fmtPrice(buyPrice)}
 📤 <b>Vender em ${ex2}:</b> $${fmtPrice(sellPrice)}
@@ -1566,16 +1569,15 @@ async function fetchOnce() {
     }
 
     for (const opp of opps) {
-      if (opp.spread >= minSpread) {
+      if (opp.profitPct >= minSpread) {
         const key = `${opp.pair}_${opp.minEx}_${opp.maxEx}`;
         const last = state.lastAlertTime[key] || 0;
         if (now - last > cooldown) {
           state.lastAlertTime[key] = now;
-          const profit = (opp.spread / 100) * capital;
-          const msg = buildAlertMessage(opp.pair, opp.spread, opp.minEx, opp.maxEx, opp.minP, opp.maxP, profit);
+          const msg = buildAlertMessage(opp.pair, opp.spread, opp.profitPct, opp.minEx, opp.maxEx, opp.minP, opp.maxP, opp.profit);
           const ok = await sendTelegram(msg);
-          addAlertToLog(opp.pair, opp.spread, opp.minEx, opp.maxEx, ok);
-          if (ok) toast(`📬 Alerta: ${opp.pair} +${opp.spread.toFixed(2)}%`, 'success');
+          addAlertToLog(opp.pair, opp.profitPct, opp.minEx, opp.maxEx, ok);
+          if (ok) toast(`📬 Alerta: ${opp.pair} +${opp.profitPct.toFixed(2)}% líquido`, 'success');
         }
       }
     }

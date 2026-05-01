@@ -48,8 +48,8 @@ module.exports = async (req, res) => {
     const priceData = await fetchAllPrices(pairs, exchanges, usdtBrl);
     const crossOpportunities = mode !== 'triangular'
       ? calcArbitrage(priceData, capital)
-          .filter(o => o.spread >= minSpread)
-          .sort((a, b) => b.spread - a.spread)
+          .filter(o => o.profitPct >= minSpread)
+          .sort((a, b) => b.profitPct - a.profitPct)
           .slice(0, maxAlerts)
       : [];
 
@@ -274,10 +274,16 @@ function calcArbitrage(priceData, capital) {
     }
 
     const spread = ((maxP - minP) / minP) * 100;
-    const afterFees = capital * (1 - 0.002) * (maxP / minP) * (1 - 0.002);
+    const buyFee = EXCHANGE_FEES[minEx] ?? 0.002;
+    const sellFee = EXCHANGE_FEES[maxEx] ?? 0.002;
+    const effectiveBuyPrice = minP * (1 + buyFee);
+    const effectiveSellPrice = maxP * (1 - sellFee);
+    const netSpread = ((effectiveSellPrice - effectiveBuyPrice) / effectiveBuyPrice) * 100;
+    const afterFees = capital * (effectiveSellPrice / effectiveBuyPrice);
     const profit = afterFees - capital;
+    const profitPct = (profit / capital) * 100;
 
-    out.push({ pair, minEx, maxEx, minP, maxP, spread, profit });
+    out.push({ pair, minEx, maxEx, minP, maxP, spread, netSpread, profit, profitPct });
   }
 
   return out;
@@ -358,8 +364,9 @@ function buildAlertMessage(opp, capital) {
   const now = new Date().toLocaleTimeString('pt-BR');
   return `🚀 <b>OPORTUNIDADE DE ARBITRAGEM</b>\n\n` +
     `💱 <b>Par:</b> ${opp.pair}\n` +
-    `📈 <b>Spread:</b> ${opp.spread.toFixed(3)}%\n` +
-    `💵 <b>Lucro Estimado:</b> $${opp.profit.toFixed(2)} (capital $${capital})\n\n` +
+    `📈 <b>Spread Bruto:</b> ${opp.spread.toFixed(3)}%\n` +
+    `📉 <b>Spread Líquido (após taxas):</b> ${opp.profitPct.toFixed(3)}%\n` +
+    `💵 <b>Lucro Líquido Estimado:</b> $${opp.profit.toFixed(2)} (capital $${capital})\n\n` +
     `📥 <b>Comprar em ${opp.minEx}:</b> $${opp.minP.toFixed(6)}\n` +
     `📤 <b>Vender em ${opp.maxEx}:</b> $${opp.maxP.toFixed(6)}\n\n` +
     `🛠️ Origem: Backend 24/7\n` +
